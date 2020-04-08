@@ -11,6 +11,8 @@
     <OutputPath>.</OutputPath>
     <Name>furmula_one_source</Name>
     <RootNamespace>furmula_one_source</RootNamespace>
+    <InterpreterId>
+    </InterpreterId>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -25,6 +27,15 @@
     <Compile Include="sandbox\game_pad_test.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="src\oct_track_creater.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="src\line.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="src\track.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="src\visualiser.py">
       <SubType>Code</SubType>
     </Compile>
@@ -33,6 +44,8 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="data\" />
+    <Folder Include="data\track\" />
     <Folder Include="sandbox\" />
     <Folder Include="setup\" />
     <Folder Include="src\" />

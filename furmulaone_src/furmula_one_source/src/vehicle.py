@@ -2,38 +2,43 @@ import json
 import os
 import numpy as np
 import time
+from .track import Track
 
 class Vehicle(object):
     def __init__(self,id: int):
         self.id = 1;
-        #
+
         # Get the module path
-        #
         self.module_path = os.path.dirname(os.path.abspath(__file__))
-        #
+
         # load the config file
-        #
         with open(self.module_path+'/../setup/vehicle_config.json','r') as f:
             self.config = json.load(f)
-        #
+
         # create addition vehicle properties
-        #
         self.initialise_vehicle_properties()
-        #
+
         # initialise the vehicle states
-        #
         self.reset_states()
-        #
+
         # initialise the vehicle position
-        #
         self.reset_vehicle_position()
-        #
+
         # create timers
-        #
         self.tLastInputUpdate = None
         self.tLastLongUpdate = None
         self.tLastLatUpdate = None
         self.tLastPosUpdate = None
+
+        # create lidar object
+        self.lidars = None
+
+
+    def initialise_lidars(self, track: Track, aFOVL: float, aFOVR: float, aFOVFront: float, aRotL: float=None, aRotR: float=None, aRotFront: float=None):
+        """
+            Set up the LIDAR objects
+        """
+
 
     def reset_states(self):
         """
