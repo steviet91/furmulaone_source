@@ -1,12 +1,11 @@
 from src.vehicle import Vehicle
 from src.visualiser import Vis
-import src.track
-import src.line
-
+from src.track import TrackHandler
 import keyboard
 from time import sleep
 from threading import Thread
 from inputs import get_gamepad
+
 
 class GamePad(object):
     def __init__(self):
@@ -20,14 +19,14 @@ class GamePad(object):
             events = get_gamepad()
             for event in events:
                 if event.code == "ABS_X":
-                    self.aSteeringWheelDemand = max(-360, min(360, event.state / 12000 * 360)) # assume 12000 is max
-                    #print('aSteeringWheelDemand: ', event.state,self.aSteeringWheelDemand)
+                    self.aSteeringWheelDemand = max(-360, min(360, event.state / 12000 * 360))  # assume 12000 is max
+                    # print('aSteeringWheelDemand: ', event.state,self.aSteeringWheelDemand)
                 if event.code == "ABS_Z":
-                    self.rBrakeDemand = min(1, event.state / 255) # max is 255
-                    #print('rBrakeDemand: ', event.state,self.rBrakeDemand)
+                    self.rBrakeDemand = min(1, event.state / 255)  # max is 255
+                    # print('rBrakeDemand: ', event.state,self.rBrakeDemand)
                 if event.code == "ABS_RZ":
-                    self.rThrottleDemand = min(1, event.state / 255) # max is 255
-                    #print('rThrottleDemand: ', event.state,self.rThrottleDemand)
+                    self.rThrottleDemand = min(1, event.state / 255)  # max is 255
+                    # print('rThrottleDemand: ', event.state,self.rThrottleDemand)
             sleep(0.0001)
 
     def exit_thread(self):
@@ -35,16 +34,17 @@ class GamePad(object):
 
 
 def main():
-    veh = Vehicle(1)
-    vis = Vis()
+    track = TrackHandler('octo_track')
+    veh = Vehicle(1, track)
+    vis = Vis(track, veh)
     gp = GamePad()
-    in_thread = Thread(target=gp.get_gamepad_inputs,daemon=True)
+    in_thread = Thread(target=gp.get_gamepad_inputs, daemon=True)
     in_thread.start()
     while True:
-        
+
         # Get user inputs
         if keyboard.is_pressed('q'):
-                break
+            break
         if keyboard.is_pressed('r'):
             veh.reset_states()
             veh.reset_vehicle_position()
@@ -66,16 +66,18 @@ def main():
         """
         # set the driver inputs
         veh.set_driver_inputs(gp.rThrottleDemand, gp.rBrakeDemand, gp.aSteeringWheelDemand)
-        
+
         # Update the dynamics
         veh.update_long_dynamics()
         veh.update_lat_dynamics()
         veh.update_position()
-        vis.draw_car(veh.posVehicle, veh.aYaw)
-        vis.draw_data(veh.get_vehicle_sensors())
+        veh.check_for_vehicle_collision()
+        vis.draw_car()
+        vis.draw_data()
+        vis.draw_track()
         vis.render_image()
         sleep(0.05)
-    
+
 
 if __name__ == "__main__":
     main()

@@ -3,17 +3,38 @@ import os
 import numpy as np
 import time
 from .track import Track
+from .geom import Circle
+from .geom import Line
+from .geom import check_for_intersection_lineseg_lineseg
+from .geom import calc_angle_between_unit_vectors
 
 class Vehicle(object):
-    def __init__(self,id: int):
-        self.id = 1;
+    def __init__(self, id: int, track: Track):
+        """
+            Initialise the vehicle object
+        """
+        # save the arguments
+        self.id = id
+        self.track = track
 
         # Get the module path
         self.module_path = os.path.dirname(os.path.abspath(__file__))
 
         # load the config file
-        with open(self.module_path+'/../setup/vehicle_config.json','r') as f:
+        with open(self.module_path + '/../setup/vehicle_config.json', 'r') as f:
             self.config = json.load(f)
+
+        # create timers
+        self.tLastInputUpdate = None
+        self.tLastLongUpdate = None
+        self.tLastLatUpdate = None
+        self.tLastPosUpdate = None
+
+        # create the car corner point offsets
+        self.carFLOffset = np.array([self.config['xVehicleLength'] * self.config['rCOGLongR'], -0.5 * self.config['xVehicleWidth']])
+        self.carFROffset = np.array([self.config['xVehicleLength'] * self.config['rCOGLongR'], 0.5 * self.config['xVehicleWidth']])
+        self.carRLOffset = np.array([-1 * self.config['xVehicleLength'] * (1 - self.config['rCOGLongR']), -0.5 * self.config['xVehicleWidth']])
+        self.carRROffset = np.array([-1 * self.config['xVehicleLength'] * (1 - self.config['rCOGLongR']), 0.5 * self.config['xVehicleWidth']])
 
         # create addition vehicle properties
         self.initialise_vehicle_properties()
@@ -24,21 +45,125 @@ class Vehicle(object):
         # initialise the vehicle position
         self.reset_vehicle_position()
 
-        # create timers
-        self.tLastInputUpdate = None
-        self.tLastLongUpdate = None
-        self.tLastLatUpdate = None
-        self.tLastPosUpdate = None
-
         # create lidar object
         self.lidars = None
 
-
-    def initialise_lidars(self, track: Track, aFOVL: float, aFOVR: float, aFOVFront: float, aRotL: float=None, aRotR: float=None, aRotFront: float=None):
+    def initialise_lidars(self, aFOVL: float, aFOVR: float, aFOVFront: float, aRotL: float = None, aRotR: float = None, aRotFront: float = None):
         """
             Set up the LIDAR objects
         """
 
+
+    def initialise_vehicle_colliders(self):
+        """
+            Set up the collider objects to detect track limit collision
+        """
+        # colliders will be the vehicle body limits defined by the FL/FR/RL/RR offsets
+        self.colliders = []
+        self.colliders.append(Line(tuple(self.carRLOffset), tuple(self.carFLOffset)))
+        self.colliders.append(Line(tuple(self.carFLOffset), tuple(self.carFROffset)))
+        self.colliders.append(Line(tuple(self.carFROffset), tuple(self.carRROffset)))
+        self.colliders.append(Line(tuple(self.carRROffset), tuple(self.carRLOffset)))
+
+        # add a collision circle, this will by used to minimise the number of track
+        # line segements that are considered for collision
+        self.collisionCircle = Circle(0, 0, 5)
+
+        # initialise the has collided flag
+        self.bHasCollided = False
+
+    def check_for_vehicle_collision(self):
+        """
+            Check for vehicle collision with the track, if collision detected then
+            state are reset
+        """
+        # first update the vehicle colliders
+        for l in self.colliders:
+            # translate the line based on vehicle movement
+            l.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
+            # rotate the line based on change in vehicle yaw
+            l.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+
+        # update the collision circle position
+        self.collisionCircle.update_centre_by_delta(self.dxVehicle, self.dyVehicle)
+
+        # find the indexes of the lines to check for collision
+        in_idxs, out_idxs = self.track.get_line_idxs_for_collision(self.collisionCircle)
+        print('Collision idxs: ',in_idxs, out_idxs)
+
+        self.bHasCollided = False
+
+        # check the inner track
+        if len(in_idxs) > 0:
+            check_lines = [self.track.data.in_lines[i] for i in in_idxs]
+            for l in self.colliders:
+                collision_check = [cl for cl in check_lines if self.get_collision_state(l,cl)]
+                if len(collision_check) > 0:
+                    # the vehicle has collided, no need to check the other colliders
+                    self.bHasCollided = True
+                    # calculate the angle between the last track segment we collided with and the
+                    # vehicle forward direction unit vector. Use this to reset the vehicle heading
+                    aCollision = calc_angle_between_unit_vectors(self.h.v_hat,collision_check[-1].v_hat)
+                    break
+
+        # check the outer track, only if the inner hasn't already collided
+        if (len(out_idxs) > 0) and not self.bHasCollided:
+            check_lines = [self.track.data.out_lines[i] for i in out_idxs]
+            for l in self.colliders:
+                collision_check = [cl for cl in check_lines if self.get_collision_state(l,cl)]
+                if len(collision_check) > 0:
+                    # the vehicle has collided, no need to check the other colliders
+                    self.bHasCollided = True
+                    # calculate the angle between the last track segment we collided with and the
+                    # vehicle forward direction unit vector. Use this to reset the vehicle heading
+                    aCollision = calc_angle_between_unit_vectors(self.h.v_hat,collision_check[-1].v_hat)
+                    break
+
+        if self.bHasCollided:
+            # move the car back by 2 * dposVehicle to give the driver a chance to recover
+            self.apply_manual_translation(-2 * self.dxVehicle, -2 * self.dyVehicle)
+            # realign the car so it's paralled with the track segment
+            self.apply_manual_rotation(aCollision)
+
+            # reset the vehicle states
+            self.reset_states()
+
+    def apply_manual_translation(self, dX: float, dY):
+        """
+            Apply a manual translation to all vehicle objects - mainly used for collisions
+        """
+        # vehicle position
+        self.posVehicle[0] += dX
+        self.posVehicle[1] += dY
+
+        # vehicle heading vector
+        self.h.translate_line_by_delta(dX, dY)
+
+        # vehicle collision objects
+        for l in self.colliders:
+            l.translate_line_by_delta(dX, dY)
+        self.collisionCircle.update_centre_by_delta(dX, dY)
+
+    def apply_manual_rotation(self, daRot: float):
+        """
+            Apply a manual rotation to all vehicle objects - mainly used for collisions
+        """
+        # vehicle yaw
+        self.aYaw += daRot
+
+        # vehicle heading vector
+        self.h.rotate_line_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+
+        # vehicle collision objects
+        for l in self.colliders:
+            l.rotate_line_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+
+    def get_collision_state(self, l1, l2):
+        """
+            Returns true if the vehicle collider has collided with a track line segement
+        """
+        do_intersect, _ = check_for_intersection_lineseg_lineseg(l1, l2)
+        return do_intersect
 
     def reset_states(self):
         """
@@ -66,16 +191,22 @@ class Vehicle(object):
         self.FTyreXTotalR = 0.0
         self.FTyreYTotalR = 0.0
         self.aBodySlip = 0.0
-        self.aYaw = 3.14/2
+        self.daYaw = 0.0
         self.nYaw = 0.0
         self.ndotYaw = 0.0
+        self.dxVehicle = 0.0
+        self.dyVehicle = 0.0
 
 
     def reset_vehicle_position(self):
         """
             Reset the vehicle position to (0,0)
         """
-        self.posVehicle = np.array([0.0,0.0],dtype=np.float64)
+        self.posVehicle = np.array([0.0, 0.0], dtype=np.float64)
+        self.aYaw = 0.0
+        self.h = Line(tuple(self.posVehicle), (1.0, 0.0))  # provides a unit vector for vehicle heading
+        # reinitialise the vehicle colliders
+        self.initialise_vehicle_colliders()
 
     def initialise_vehicle_properties(self):
         """
@@ -83,18 +214,18 @@ class Vehicle(object):
         """
         self.xCOGF = self.config['xWheelBase'] * self.config['rCOGLongR']
         self.xCOGR = self.config['xWheelBase'] * (1 - self.config['rCOGLongR'])
-        self.FBrakingMax = self.config['mVehicle'] * self.config['gGravity'] * 0.8 # leave some capacity for lat
+        self.FBrakingMax = self.config['mVehicle'] * self.config['gGravity'] * 0.8  # leave some capacity for lat
 
-    def set_driver_inputs(self,rThrottlePedalDemand: float,rBrakePedalDemand: float,aSteeringWheelDemand: float):
+    def set_driver_inputs(self, rThrottlePedalDemand: float, rBrakePedalDemand: float, aSteeringWheelDemand: float):
         """
             Update the steering inputs
         """
         #
         # Check the limits of inputs
         #
-        rThrottlePedalDemand = max(0.0,min(1.0,rThrottlePedalDemand))
-        rBrakePedalDemand = max(0.0,min(1.0,rBrakePedalDemand))
-        aSteeringWheelDemand = max(self.config['aSteeringWheelMin'],min(self.config['aSteeringWheelMax'],aSteeringWheelDemand))
+        rThrottlePedalDemand = max(0.0, min(1.0, rThrottlePedalDemand))
+        rBrakePedalDemand = max(0.0, min(1.0, rBrakePedalDemand))
+        aSteeringWheelDemand = max(self.config['aSteeringWheelMin'], min(self.config['aSteeringWheelMax'], aSteeringWheelDemand))
         #
         # Prevent combined throttle/braking
         #
@@ -139,14 +270,14 @@ class Vehicle(object):
         #
         # calculate the torque demand
         #
-        MMax = np.interp(self.nWheelR * 30 / np.pi,self.config['nWheel_BRP'],self.config['MPowertrainMax_LU'])
-        MMin = np.interp(self.nWheelR * 30 / np.pi,self.config['nWheel_BRP'],self.config['MPowertrainMin_LU'])
+        MMax = np.interp(self.nWheelR * 30 / np.pi, self.config['nWheel_BRP'], self.config['MPowertrainMax_LU'])
+        MMin = np.interp(self.nWheelR * 30 / np.pi, self.config['nWheel_BRP'], self.config['MPowertrainMin_LU'])
         MPowertrain = (MMax - MMin) * self.rThrottlePedal + MMin
         #
         # calculate the braking demand
         #
         FBrakeTotal = self.FBrakingMax * self.rBrakePedal * np.sign(self.vxVehicle)
-        FBrakeF = FBrakeTotal * (1 - self.config['rCOGLongR']) # account for COG pos, weight transfer not modelled
+        FBrakeF = FBrakeTotal * (1 - self.config['rCOGLongR'])  # account for COG pos, weight transfer not modelled
         FBrakeR = FBrakeTotal - FBrakeF
         MBrakeF = FBrakeF * self.config['rBrakeDisc']
         MBrakeR = FBrakeR * self.config['rBrakeDisc']
@@ -191,7 +322,7 @@ class Vehicle(object):
         #
         self.nWheelF = self.vxVehicle / self.config['rRollRadF']
         self.nWheelR = self.vxVehicle / self.config['rRollRadR']
-        #print(MPowertrain, self.gxVehicle, self.FTyreXTotalF, self.FTyreXTotalR,self.rThrottlePedal,self.vxVehicle)
+        # print(MPowertrain, self.gxVehicle, self.FTyreXTotalF, self.FTyreXTotalR,self.rThrottlePedal,self.vxVehicle)
 
     def update_lat_dynamics(self):
         """
@@ -201,14 +332,14 @@ class Vehicle(object):
         self.aSteer = self.aSteeringWheel / self.config['rSteeringRatio'] * np.pi / 180
 
         # calculate the slip ratios
-        #print('aSteer:',self.aSteer,'vy:',self.vyVehicle,'x',self.xCOGF,'nYaw:',self.nYaw,'vx:',self.vxVehicle)
+        # print('aSteer:',self.aSteer,'vy:',self.vyVehicle,'x',self.xCOGF,'nYaw:',self.nYaw,'vx:',self.vxVehicle)
         if abs(self.vxVehicle) <= self.config['vVehicleStationary']:
             self.aSlipF = 0.0
             self.aSlipR = 0.0
         else:
             self.aSlipF = self.aSteer - np.arctan((self.vyVehicle + self.xCOGF * self.nYaw) / abs(self.vxVehicle))
             self.aSlipR = -1 * np.arctan((self.vyVehicle - self.xCOGR * self.nYaw) / abs(self.vxVehicle))
-           
+
         # calculate the maximum tyre forces
         FTyreYMaxF = np.sqrt((self.config['mVehicle'] * self.config['gGravity'] * (1 - self.config['rCOGLongR']) * self.config['mu'])**2 - (self.FTyreXTotalF)**2)
         FTyreYMaxR = np.sqrt((self.config['mVehicle'] * self.config['gGravity'] * self.config['rCOGLongR'] * self.config['mu'])**2 - (self.FTyreXTotalR)**2)
@@ -235,37 +366,48 @@ class Vehicle(object):
             tElapsed = tNow - self.tLastLatUpdate
             self.tLastLatUpdate = tNow
             self.vyVehicle += self.gyVehicle * tElapsed
-           
-            #if abs(self.vyVehicle) < self.config['vVehicleStationary']:
+
+            # if abs(self.vyVehicle) < self.config['vVehicleStationary']:
             #    self.vyVehicle = self.config['vVehicleStationary']
             if abs(self.vxVehicle) <= self.config['vVehicleStationary']:
                 self.vyVehicle = 0.0
             self.nYaw += self.ndotYaw * tElapsed
-            self.aYaw += self.nYaw * tElapsed
 
         # calculate velocity and body slip
         self.aBodySlip = np.arctan(self.vyVehicle / abs(self.vxVehicle))
         self.vVehicle = np.sqrt(self.vxVehicle**2 + self.vyVehicle**2)
-        #print('vy:',self.vyVehicle,'nYaw:', self.nYaw, 'aSlipF:', self.aSlipF, 'aSlipR:', self.aSlipR)
-
+        # print('vy:',self.vyVehicle,'nYaw:', self.nYaw, 'aSlipF:', self.aSlipF, 'aSlipR:', self.aSlipR)
 
     def get_vehicle_sensors(self):
         """
             Returns the vehicle sensors
         """
         return {'vVehicle': self.vVehicle, 'vxVehicle': self.vxVehicle, 'vyVehicle': self.vyVehicle, 'aSlipF': self.aSlipF, 'aSlipR': self.aSlipR,
-               'rThrottlePedal': self.rThrottlePedal, 'rBrakePedal': self.rBrakePedal, 'aSteeringWheel': self.aSteeringWheel, 'nYaw': self.nYaw}
+                'rThrottlePedal': self.rThrottlePedal, 'rBrakePedal': self.rBrakePedal, 'aSteeringWheel': self.aSteeringWheel, 'nYaw': self.nYaw,
+                'xVehicle': self.posVehicle[0], 'yVehicle': self.posVehicle[1]}
 
     def update_position(self):
         """
             Update the vehicle position in the world
-        """ 
+        """
         if self.tLastPosUpdate is None:
             self.tLastPosUpdate = time.time()
         else:
             tNow = time.time()
             tElapsed = tNow - self.tLastPosUpdate
             self.tLastPosUpdate = tNow
+
+            # update heading
+            self.daYaw = self.nYaw * tElapsed
+            self.aYaw += self.daYaw
+
+            # update position
             sVehicleMoved = self.vVehicle * tElapsed
-            self.posVehicle[0] += sVehicleMoved * np.cos(self.aYaw+self.aBodySlip) # xVehicle
-            self.posVehicle[1] += sVehicleMoved * np.sin(self.aYaw+self.aBodySlip) # yVehicle
+            self.dxVehicle = sVehicleMoved * np.cos(self.aYaw + self.aBodySlip)
+            self.dyVehicle = sVehicleMoved * np.sin(self.aYaw + self.aBodySlip)
+            self.posVehicle[0] += self.dxVehicle  # xVehicle
+            self.posVehicle[1] += self.dyVehicle  # yVehicle
+
+            # update heading vector
+            self.h.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
+            self.h.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
