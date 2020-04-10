@@ -220,7 +220,7 @@ def calc_u_lineseg_lineseg(l1: Line, l2: Line):
     """
     n = (l1.x1 - l1.x2) * (l1.y1 - l2.y1) - (l1.y1 - l1.y2) * (l1.x1 - l2.x1)
     d = (l1.x1 - l1.x2) * (l2.y1 - l2.y2) - (l1.y1 - l1.y2) * (l2.x1 - l2.x2)
-    if d is None:
+    if d == 0:
         return None
     else:
         return -1 * n / d

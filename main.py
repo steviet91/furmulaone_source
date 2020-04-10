@@ -72,10 +72,13 @@ def main():
         veh.update_lat_dynamics()
         veh.update_position()
         veh.check_for_vehicle_collision()
+        veh.update_lidars()
         vis.draw_car()
         vis.draw_data()
         vis.draw_track()
+        vis.draw_all_lidars()
         vis.render_image()
+        vis.update_camera_position()
         sleep(0.05)
 
 

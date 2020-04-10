@@ -3,6 +3,7 @@ import numpy as np
 from .track import TrackHandler
 from .vehicle import Vehicle
 from .geom import rotate_point
+from .lidar import Lidar
 
 
 class Vis(object):
@@ -29,6 +30,7 @@ class Vis(object):
         self.carRROffset = np.array([-1 * self.xVehicleLength * (1 - self.rCOGLongR), 0.5 * self.xVehicleWidth])
         self.orig_img = np.zeros((self.img_w, self.img_h, 3), np.uint8)
         self.baseColour = (0, 255, 179)
+        self.lidarColour = (29, 142, 249)
 
     def draw_car(self):
 
@@ -56,7 +58,10 @@ class Vis(object):
         cv.circle(self.show_img, (int(self.carPos[0]), int(self.carPos[1])), 2, self.baseColour, -1)
         cv.circle(self.show_img, (int(self.carPos[0]), int(self.carPos[1])), int(self.vehicle.collisionCircle.r / self.img_scale), (255, 0, 0))
 
-        # check the proximity of the car to the screen edges, update the translation
+    def update_camera_position(self):
+        """
+            Check the proximity of the car to the screen edges, update the translation
+        """
         # x
         if self.carPos[0] < self.img_x_buffer:
             # about to disappear to the left of the screen, shift if to the right
@@ -92,6 +97,29 @@ class Vis(object):
             i += 1
             s = k + ':{:.5f}'.format(v)
             cv.putText(self.show_img, s, pos, cv.FONT_HERSHEY_SIMPLEX, 0.75, self.baseColour, thickness)
+
+    def draw_all_lidars(self):
+        """
+            Draw the all lidars
+        """
+        self.draw_lidar(self.vehicle.lidar_front)
+        self.draw_lidar(self.vehicle.lidar_left)
+        self.draw_lidar(self.vehicle.lidar_right)
+
+    def draw_lidar(self, lidar: Lidar):
+        """
+            Draw all rays that have hit a point and put distance on ray
+        """
+        thickness = 1
+        for i,r in enumerate(lidar.rays):
+            if lidar.collision_array[i] > 0:
+                # the lidar ray scored a hit
+                p1 = r.p1 / self.img_scale + self.originOffset
+                p2 = (r.p1 + r.v_hat * lidar.collision_array[i]) / self.img_scale + self.originOffset
+                cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.lidarColour)
+                #pos = (r.p1 + r.v_hat * lidar.collision_array[i] / 2 ) / self.img_scale + self.originOffset
+                #cv.putText(self.show_img, '{:.2f} m'.format(lidar.collision_array[i]), tuple(pos.astype(np.int32)), cv.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), thickness)
+
 
     def draw_track(self):
         """

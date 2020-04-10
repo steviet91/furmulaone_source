@@ -7,6 +7,7 @@ from .geom import Circle
 from .geom import Line
 from .geom import check_for_intersection_lineseg_lineseg
 from .geom import calc_angle_between_unit_vectors
+from .lidar import Lidar
 
 class Vehicle(object):
     def __init__(self, id: int, track: Track):
@@ -39,6 +40,9 @@ class Vehicle(object):
         # create addition vehicle properties
         self.initialise_vehicle_properties()
 
+        # create the lidars
+        self.initialise_lidars(60, 60, 60)
+
         # initialise the vehicle states
         self.reset_states()
 
@@ -48,11 +52,51 @@ class Vehicle(object):
         # create lidar object
         self.lidars = None
 
-    def initialise_lidars(self, aFOVL: float, aFOVR: float, aFOVFront: float, aRotL: float = None, aRotR: float = None, aRotFront: float = None):
+    def initialise_lidars(self, aFOVL: float, aFOVR: float, aFOVFront: float, aRotL: float = 0.0, aRotR: float = 0.0, aRotFront: float = 0.0):
         """
             Set up the LIDAR objects
         """
+        # convert angles to rad
+        aFOVFront = aFOVFront * np.pi / 180
+        aFOVL = aFOVL * np.pi / 180
+        aFOVR = aFOVR * np.pi / 180
+        aRotFront = aRotFront * np.pi / 180
+        aRotL = aRotL * np.pi / 180
+        aRotR = aRotR * np.pi / 180
 
+        # set up the front lidar
+        self.aLidarF = 0.0 + aRotFront
+        self.lidar_front = Lidar(self.track, self.aLidarF, self.carFLOffset[0], 0, aFOVFront)
+
+        # set up the left lidar
+        self.aLidarL = -1.0 * np.pi / 2.0 + aRotL
+        x0 = self.carFLOffset[0] - self.config['xVehicleLength'] / 2
+        y0 = self.carFLOffset[1]
+        self.lidar_left = Lidar(self.track, self.aLidarL, x0, y0, aFOVL)
+
+        # set up the right lidar
+        self.aLidarR = np.pi / 2.0 + aRotR
+        x0 = self.carFROffset[0] - self.config['xVehicleLength'] / 2
+        y0 = self.carFROffset[1]
+        self.lidar_right = Lidar(self.track, self.aLidarR, x0, y0, aFOVR)
+
+    def update_lidars(self, daRotFront: float=0.0, daRotL: float=0.0, daRotR: float=0.0):
+        """
+            Apply any rotation to the lidar (relative to the vehicle) and fire the liders
+        """
+        # rotate the lidars
+        # TODO apply a limit on nRot and min max rotations
+        if abs(daRotFront) > 0.0:
+            self.lidar_front.rotate_lidar_by_delta(daRotFront, self.lidar_front.x0, self.lidar_front.y0)
+        if abs(daRotL) > 0.0:
+            self.lidar_left.rotate_lidar_by_delta(daRotL, self.lidar_left.x0, self.lidar_left.y0)
+        if abs(daRotR) > 0.0:
+            self.lidar_right.rotate_lidar_by_delta(daRotR, self.lidar_right.x0, self.lidar_right.y0)
+
+        # fire the lidars
+        self.lidar_front.fire_lidar()
+        self.lidar_left.fire_lidar()
+        self.lidar_right.fire_lidar()
 
     def initialise_vehicle_colliders(self):
         """
@@ -77,16 +121,6 @@ class Vehicle(object):
             Check for vehicle collision with the track, if collision detected then
             state are reset
         """
-        # first update the vehicle colliders
-        for l in self.colliders:
-            # translate the line based on vehicle movement
-            l.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
-            # rotate the line based on change in vehicle yaw
-            l.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
-
-        # update the collision circle position
-        self.collisionCircle.update_centre_by_delta(self.dxVehicle, self.dyVehicle)
-
         # find the indexes of the lines to check for collision
         in_idxs, out_idxs = self.track.get_line_idxs_for_collision(self.collisionCircle)
 
@@ -144,6 +178,11 @@ class Vehicle(object):
             l.translate_line_by_delta(dX, dY)
         self.collisionCircle.update_centre_by_delta(dX, dY)
 
+        # lidars
+        self.lidar_front.translate_lidars_by_delta(dX, dY)
+        self.lidar_left.translate_lidars_by_delta(dX, dY)
+        self.lidar_right.translate_lidars_by_delta(dX, dY)
+
     def apply_manual_rotation(self, daRot: float):
         """
             Apply a manual rotation to all vehicle objects - mainly used for collisions
@@ -157,6 +196,11 @@ class Vehicle(object):
         # vehicle collision objects
         for l in self.colliders:
             l.rotate_line_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+
+        # lidars
+        self.lidar_front.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+        self.lidar_left.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+        self.lidar_right.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
 
     def get_collision_state(self, l1, l2):
         """
@@ -207,6 +251,9 @@ class Vehicle(object):
         self.h = Line(tuple(self.posVehicle), (1.0, 0.0))  # provides a unit vector for vehicle heading
         # reinitialise the vehicle colliders
         self.initialise_vehicle_colliders()
+        self.lidar_front.reset_lidar()
+        self.lidar_left.reset_lidar()
+        self.lidar_right.reset_lidar()
 
     def initialise_vehicle_properties(self):
         """
@@ -411,3 +458,19 @@ class Vehicle(object):
             # update heading vector
             self.h.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
             self.h.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+
+            # update any vehicle child objects
+            # collision objects
+            for l in self.colliders:
+                # translate the line based on vehicle movement
+                l.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
+                # rotate the line based on change in vehicle yaw
+                l.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+            self.collisionCircle.update_centre_by_delta(self.dxVehicle, self.dyVehicle)
+            # lidars
+            self.lidar_front.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
+            self.lidar_left.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
+            self.lidar_right.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
+            self.lidar_front.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+            self.lidar_left.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+            self.lidar_right.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
