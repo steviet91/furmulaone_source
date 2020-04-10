@@ -74,19 +74,8 @@ class TrackHandler(object):
         """
             This return a list of indexes of lines that should be checked for collision
         """
-        in_idxs = []
-        out_idxs = []
-        for i,l in enumerate(self.data.in_lines):
-            print('in:',i)
-            if self.check_line_for_collision(l, c):
-                in_idxs.append(i)
-        for i,l in enumerate(self.data.out_lines):
-            print('out:',i)
-            if self.check_line_for_collision(l, c):
-                out_idxs.append(i)
-
-        #in_idxs = [i for i,l in enumerate(self.data.in_lines) if self.check_line_for_collision(l, c)]
-        #out_idxs = [i for i,l in enumerate(self.data.out_lines) if self.check_line_for_collision(l, c)]
+        in_idxs = [i for i,l in enumerate(self.data.in_lines) if self.check_line_for_collision(l, c)]
+        out_idxs = [i for i,l in enumerate(self.data.out_lines) if self.check_line_for_collision(l, c)]
 
         return in_idxs, out_idxs
 
@@ -97,10 +86,6 @@ class TrackHandler(object):
                 - That intersects at least once with the circle
         """
         # check the distance of the points to the circle's centre
-        print('p1: ',calc_euclid_distance_2d(l.p1, (c.x0, c.y0)))
-        print('p2: ',calc_euclid_distance_2d(l.p2, (c.x0, c.y0)))
-        print('inter: ',check_for_intersection_lineseg_circle(l, c))
-        print(c.x0, c.y0, c.r)
         if calc_euclid_distance_2d(l.p1, (c.x0, c.y0)) <= c.r:
             # p1 lies within the circumference of the circle
             return True
@@ -175,7 +160,6 @@ class Track(object):
             # rotate the points, they should now be translated to the origin
             p1 = rotate_point(0.0, 0.0, aTrackRotation0, p1)
             p2 = rotate_point(0.0, 0.0, aTrackRotation0, p2)
-            print(i,p1,p2)
             self.in_lines.append(Line(tuple(p1), tuple(p2)))
 
         # convert the out points to lines
@@ -190,7 +174,6 @@ class Track(object):
             # rotate the points, they should now be translated to the origin
             p1 = rotate_point(0.0, 0.0, aTrackRotation0, p1)
             p2 = rotate_point(0.0, 0.0, aTrackRotation0, p2)
-            print(i,p1,p2)
             self.out_lines.append(Line(tuple(p1), tuple(p2)))
 
         # now set the final start line and poisition

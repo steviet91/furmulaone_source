@@ -89,7 +89,6 @@ class Vehicle(object):
 
         # find the indexes of the lines to check for collision
         in_idxs, out_idxs = self.track.get_line_idxs_for_collision(self.collisionCircle)
-        print('Collision idxs: ',in_idxs, out_idxs)
 
         self.bHasCollided = False
 
@@ -116,7 +115,8 @@ class Vehicle(object):
                     self.bHasCollided = True
                     # calculate the angle between the last track segment we collided with and the
                     # vehicle forward direction unit vector. Use this to reset the vehicle heading
-                    aCollision = calc_angle_between_unit_vectors(self.h.v_hat,collision_check[-1].v_hat)
+                    # collision with the outer track needs a negative scaling on the angle
+                    aCollision = -1 * calc_angle_between_unit_vectors(self.h.v_hat,collision_check[-1].v_hat)
                     break
 
         if self.bHasCollided:

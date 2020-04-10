@@ -9,9 +9,9 @@ class Circle(object):
         """
             Initialise the object and create the circle
         """
-        self.x0 = x0  # centre x
-        self.y0 = y0  # centre y
-        self.r = r  # radius
+        self.x0 = float(x0)  # centre x
+        self.y0 = float(y0)  # centre y
+        self.r = float(r)  # radius
 
     def update_centre_by_delta(self, dX: float, dY: float):
         """
@@ -67,16 +67,16 @@ class Line(object):
         """
             Initialise the object and create the line
         """
-        self.x1 = p1[0]
-        self.x2 = p2[0]
-        self.y1 = p1[1]
-        self.y2 = p2[1]
-        self.p1 = np.array([self.x1, self.y1])
-        self.p2 = np.array([self.x2, self.y2])
+        self.x1 = float(p1[0])
+        self.y1 = float(p1[1])
+        self.x2 = float(p2[0])
+        self.y2 = float(p2[1])
+        self.p1 = np.array([self.x1, self.y1], dtype=np.float64)
+        self.p2 = np.array([self.x2, self.y2], dtype=np.float64)
         self.p1orig = np.copy(self.p1)  # store the original points
         self.p2orig = np.copy(self.p2)  # store the original points
-        self.dX = 0.0
-        self.dY = 0.0
+        self.dX = float(0.0)
+        self.dY = float(0.0)
         self.set_vector()
         self.set_unit_vector()
         self.set_magnitude()
@@ -263,45 +263,103 @@ def get_intersection_point_lineseg_circle(l: Line, c: Circle):
 
 def check_for_intersection_lineseg_circle(l: Line, c: Circle):
     """
-        Check for an intersection between a line segment and a circle.
-        solves for t, where:
+        Check for an intersection between a line segment (finite line) and a circle.
+
+        Uses the wolfram method for an infinite line and circle. If there are
+        any intersects here then it will check if 0 <= t <= 1 to confirm the
+        intersection lies on the line segment, where:
         Line Seg:
             x = x1 + t(x2 - x1)
             y = y1 + t(y2 - y1)
-        Circle:
-            (x - x0)**2 + (y - y0)**2 = r**2
 
-        I've probably F****d up the substition and rearragnement to calc the coefficients
+        The wolfram approach considers a circle who's centre lies at (0, 0),
+        appropriate translations are made to account for this.
+
+        An initial scaling is applied to ensure the values used in the equations
+        remain small by checking the distance between the circles centre and the
+        line vertices
+
     """
-    # need to solve a quadratic
-    coeff = [0, 0, 0]
-    # t**2
-    coeff[0] = (l.x2**2 - 2 * l.x2 * l.x1 + l.x1**2 + l.y2**2 - 2 * l.y2 * l.y1 + l.y1**2)
-    # t
-    coeff[1] = (2 * l.x2 * l.x1 - 2 * l.x2 * c.x0 - 2 * l.x1**2 + 2 * l.x1 * c.x0 + 2 * l.y2 * l.y1 - 2 * l.y2 * c.y0 - 2 * l.y1**2 + 2 * l.y1 * c.y0)
-    # const
-    coeff[2] = (l.x1**2 - 2 * c.y0 * l.x1 + c.x0**2 + l.y1**2 - 2 * c.y0 * l.y1 + c.y0**2 - c.r**2)
 
-    ts_temp = np.roots(coeff)
-    print(ts_temp)
-    if not np.isreal(ts_temp).all():
-        # roots are complex
+    # check the distance from the circle centre to the line points. We're trying
+    # to reduce the magnitude of the number involved in the calculcation here.
+    # given the return value is t the returns will remain valid
+    large_threshold = float(100)
+    d1 = calc_euclid_distance_2d(tuple(l.p1), (c.x0, c.y0))
+    d2 = calc_euclid_distance_2d(tuple(l.p2), (c.x0, c.y0))
+    if  d1 > large_threshold:
+        scaling = d1 / large_threshold
+        # scale the circle
+        c = Circle(c.x0 / scaling, c.y0 / scaling, c.r / scaling)
+        # scale the line
+        l = Line(tuple(l.p1 / scaling), tuple(l.p2 / scaling))
+    elif d2 > large_threshold:
+        scaling = d2 / large_threshold
+        # scale the circle
+        c = Circle(c.x0 / scaling, c.y0 / scaling, c.r / scaling)
+        # scale the line
+        l = Line(tuple(l.p1 / scaling), tuple(l.p2 / scaling))
+
+    # calculate the offset of the circle to (0, 0)
+    c0 = np.array([c.x0, c.y0])
+
+    # make a new temporary line with offset
+    p1 = l.p1 - c0
+    p2 = l.p2 - c0
+    l0 = Line(tuple(p1), tuple(p2))
+
+    # set the variables
+    dx = l0.x2 - l0.x1
+    dy = l0.y2 - l0.y1
+    dr = np.sqrt(dx**2 + dy**2)
+    D = l0.x1 * l0.y2 - l0.x2 * l0.y1
+
+    # determine if the roots are complex
+    w = (c.r**2 * dr**2 - D**2)
+    if w < 0:
+        # roots will be complex
         return False, None
+    elif w == 0:
+        # only one intersection, the line is tangent
+        x_root = np.array([D * dy / dr**2])
+        y_root = np.array([-1 * D * dx / dr**2])
     else:
-        ts = []
-        do_intersect = False
-        # check the roots lie within 0 to 1
-        for t in ts_temp:
+        # intersection
+        if dy < 0:
+            # can't use np.sign as it return 0 in the case np.sign(0)
+            sign_dy = -1.0
+        else:
+            sign_dy = 1.0
+        ux = sign_dy * dx * np.sqrt(w)
+        x_root = np.array([D * dy + ux, D * dy - ux]) / dr**2
+        uy = np.abs(dy) * np.sqrt(w)
+        y_root = np.array([-1 * D * dx + uy, -1 * D * dx - uy]) / dr**2
+
+    # we now have the intersections of an infinite line with a cirlce at (0, 0)
+    # translate the coordinates back to the circle origin and confirm
+    # 0 <= t <= 1 is satisified, i.e. at least one of the intersections lies on
+    # our finite line
+
+    # use x to check {x = tx2 + (1 - t)x1} unless the demon is 0 (line is vertical)
+    # in which case revert to y
+    ts = []
+    if (l0.x2 - l0.x1) != 0:
+        for x in x_root:
+            t = (x - l0.x1) / (l0.x2 - l0.x1)
             if 0 <= t <= 1:
                 ts.append(t)
-                do_intersect = True
-        if do_intersect:
-            # roots are real and at least one lies on the line segment
-            return do_intersect, ts
-        else:
-            # roots were real but they didn't lie on the line segment
-            return do_intersect, None
+    else:
+        for y in y_root:
+            t = (y - l0.y1) / (l0.y2 - l0.y1)
+            if 0 <= t <= 1:
+                ts.append(t)
 
+    if len(ts) == 0:
+        # no intersections with our finite line
+        return False, None
+    else:
+        # we have an intersection
+        return True, ts
 
 def rotate_point(cx: float, cy: float, a: float, p):
     """
@@ -328,7 +386,7 @@ def calc_euclid_distance_2d(p1: tuple, p2: tuple):
     """
         Returns the euclidian distance between p1 and p2
     """
-    return np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+    return np.sqrt((float(p2[0]) - float(p1[0]))**2 + (float(p2[1]) - float(p1[1]))**2)
 
 def calc_angle_between_unit_vectors(v1_hat, v2_hat):
     """
@@ -346,6 +404,7 @@ def calc_angle_between_unit_vectors(v1_hat, v2_hat):
 
 
 if __name__ == "__main__":
+    """
     ls = [Line((-1.722077545, -4.1574579), (539.4740247, -545.35355804)),
         Line((539.4740247,  -545.35355804), (539.4740247,  -1310.72042277)),
         Line(( 539.4740247,  -1310.72042277), (-1.72207545e+00, -1.85191652e+03)),
@@ -354,9 +413,21 @@ if __name__ == "__main__":
         Line((-1308.28504032, -1310.72042277), (-1308.28504032,  -545.35355804)),
         Line((-1308.28504032,  -545.35355804), (-767.08894018,   -4.1574579)),
         Line((-767.08894018,   -4.1574579), (-1.72207545, -4.1574579))]
-    #c = Circle(28.2472, -27.873434, 5)
-    c = Circle(330, -336, 5)
+    """
 
+    ls = [Line((-2, -4), (534, -545)),
+        Line((540,  -545.4), (540,  -1311)),
+        Line(( 540,  -1311), (-2, -1852)),
+        Line((-2, -1852), ( -767, -1852)),
+        Line(( -767, -1852), (-1308, -1311)),
+        Line((-1308, -1311), (-1308,  -545)),
+        Line((-1308,  -545), (-767,   -4)),
+        Line((-767,   -4), (-2, -4))]
+    #c = Circle(28.2472, -27.873434, 5)
+    #ls = [Line((-767,   -4), (-2, -4))]
+    c = Circle(0, 0, 200)
+    #ls = [Line((0.5,2),(2,8))]
+    #c = Circle(1 , 4, 0.5)
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
