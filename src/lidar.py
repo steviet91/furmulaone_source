@@ -128,11 +128,10 @@ class Lidar(object):
 
 if __name__ == "__main__":
     import time
-    import timeit
     t = TrackHandler('octo_track')
     l = Lidar(t, 0, 0, 0, 20)
-    n = 100000
+    n = 1000
     t = time.time()
-    #for i in range(0,n):
-    l.fire_lidar()
-    #print((time.time()-t) / n)
+    for i in range(0,n):
+        l.fire_lidar()
+    print((time.time()-t) * 1000 / n,'ms')

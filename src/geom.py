@@ -1,4 +1,6 @@
 import numpy as np
+from numba import jit
+from numba import njit
 
 class Circle(object):
     """
@@ -117,8 +119,8 @@ class Line(object):
             Rotate a line by a given angle about point cX cY - note this is applied as a delta
         """
         # rotate the points
-        self.p1 = rotate_point(cX, cY, aRot, self.p1)
-        self.p2 = rotate_point(cX, cY, aRot, self.p2)
+        rotate_point(cX, cY, aRot, self.p1)
+        rotate_point(cX, cY, aRot, self.p2)
 
         # update the point coordinates
         self.x1 = self.p1[0]
@@ -173,8 +175,8 @@ def check_for_intersection_lineseg_lineseg(l1: Line, l2: Line, l2_is_ray: bool =
         Returns true if the line provided intersects with provided second line. Logic for the case where l2 is simply a ray
     """
     # calculate the Bezier parameters
-    t = calc_t_lineseg_lineseg(l1, l2)
-    u = calc_u_lineseg_lineseg(l1, l2)
+    t = calc_t_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+    u = calc_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
     if t is None or u is None:
         return False, None
     else:
@@ -201,24 +203,25 @@ def get_intersection_point_lineseg_lineseg(l1: Line, l2: Line, l2_is_ray: bool =
     else:
         return None
 
-def calc_t_lineseg_lineseg(l1: Line, l2: Line):
+@njit
+def calc_t_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float):
     """
-        Caclulate the Bezier parameter for line 1 (self)
+        Caclulate the Bezier parameter for line 1 (x/y 1,2)
     """
-    n = (l1.x1 - l2.x1) * (l2.y1 - l2.y2) - (l1.y1 - l2.y1) * (l2.x1 - l2.x2)
-    d = (l1.x1 - l1.x2) * (l2.y1 - l2.y2) - (l1. y1 - l1.y2) * (l2.x1 - l2.x2)
+    n = (x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)
+    d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
     if d == 0:
         return None
     else:
         return n / d
 
-
-def calc_u_lineseg_lineseg(l1: Line, l2: Line):
+@njit
+def calc_u_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float):
     """
-        Calculate the Bezier parameter for line 2
+        Calculate the Bezier parameter for line 2 (x/y 3/4)
     """
-    n = (l1.x1 - l1.x2) * (l1.y1 - l2.y1) - (l1.y1 - l1.y2) * (l1.x1 - l2.x1)
-    d = (l1.x1 - l1.x2) * (l2.y1 - l2.y2) - (l1.y1 - l1.y2) * (l2.x1 - l2.x2)
+    n = (x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)
+    d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
     if d == 0:
         return None
     else:
@@ -283,6 +286,8 @@ def check_for_intersection_lineseg_circle(l: Line, c: Circle):
     # check the distance from the circle centre to the line points. We're trying
     # to reduce the magnitude of the number involved in the calculcation here.
     # given the return value is t the returns will remain valid
+    import time
+    
     large_threshold = float(100)
     d1 = calc_euclid_distance_2d(tuple(l.p1), (c.x0, c.y0))
     d2 = calc_euclid_distance_2d(tuple(l.p2), (c.x0, c.y0))
@@ -360,6 +365,7 @@ def check_for_intersection_lineseg_circle(l: Line, c: Circle):
         # we have an intersection
         return True, ts
 
+@njit
 def rotate_point(cx: float, cy: float, a: float, p):
     """
         Rotate the point p about the center (cx,cy) by angle a (rad)
@@ -381,6 +387,7 @@ def rotate_point(cx: float, cy: float, a: float, p):
 
     return p
 
+@jit
 def calc_euclid_distance_2d(p1: tuple, p2: tuple):
     """
         Returns the euclidian distance between p1 and p2
