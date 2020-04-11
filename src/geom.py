@@ -286,7 +286,6 @@ def check_for_intersection_lineseg_circle(l: Line, c: Circle):
     # check the distance from the circle centre to the line points. We're trying
     # to reduce the magnitude of the number involved in the calculcation here.
     # given the return value is t the returns will remain valid
-    import time
     
     large_threshold = float(100)
     d1 = calc_euclid_distance_2d(tuple(l.p1), (c.x0, c.y0))
