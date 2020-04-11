@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class Circle(object):
     """
         Create a circle from a centre and radius

@@ -4,6 +4,8 @@ from .geom import Line
 from .geom import Circle
 from .geom import get_intersection_point_lineseg_lineseg
 from .geom import calc_euclid_distance_2d
+import time
+#from multiprocessing import Pool
 
 class Lidar(object):
     """
@@ -33,6 +35,10 @@ class Lidar(object):
 
         # intialise the collision array
         self.initialise_collision_array()
+
+        # initialise the mp pool
+        #self.pool = Pool(4)
+
 
 
     def initialise_rays(self):
@@ -87,42 +93,26 @@ class Lidar(object):
         """
         # find the indexes of the track segments to check collision for
         in_idxs, out_idxs = self.track.get_line_idxs_for_collision(self.collisionCircle)
-
-        # reset the collision array - i.e. set all values to -1
-        self.initialise_collision_array()
-
-        # check the inside track set fist
+        # get the objects of the lines that should be checked for collision
+        check_lines = []
         if len(in_idxs) > 0:
-            check_lines = [self.track.data.in_lines[i] for i in in_idxs]
-            # cast each ray onto the track and return the minimum collision distance
-            for i,r in enumerate(self.rays):
-                # calc the distances to each segment for this ray
-                ds = np.array([self.cast_ray(r, l) for l in check_lines])
-
-                # check the returned values
-                if np.max(ds) > 0:
-                    # get the minimun distance
-                    self.collision_array[i] = np.min(ds[np.where(ds > 0)[0]])
-
-        # check the outside track
+            check_lines.extend([self.track.data.in_lines[i] for i in in_idxs])
         if len(out_idxs) > 0:
-            check_lines = [self.track.data.out_lines[i] for i in out_idxs]
-            # cast each ray on the track and return the minimum collision distance
-            for i,r in enumerate(self.rays):
-                # calc the distance to each segment fro this ray
-                ds = np.array([self.cast_ray(r, l) for l in check_lines])
+            check_lines.extend([self.track.data.out_lines[i] for i in out_idxs])
+        # calculate the collision array
+        self.collision_array = np.array([self.check_rays(r, check_lines) for r in self.rays])
 
-                # check the returned values - this time we need to consider the result of
-                # checking the in lines
-                if np.max(ds) > 0:
-                    # get the minimun distance and compare to the current value
-                    min_d = np.min(ds[np.where(ds > 0)[0]])
-                    if self.collision_array[i] < 0:
-                        # the inner didn't score a collision, so the distance is this one
-                        self.collision_array[i] = min_d
-                    else:
-                        # this inner scored a collision, so we take the min of both
-                        self.collision_array[i] = min(min_d, self.collision_array[i])
+    def check_rays(self, r: Line, check_lines: list):
+        """
+            Calculate the minimum distance to each of the provided lines
+        """
+        ds = np.array([self.cast_ray(r, l) for l in check_lines])
+        # if the ray scored a collision then find the minimum distance (-1 is no collision)
+        if np.max(ds) > 0:
+            # get the minimun distance
+            return np.min(ds[np.where(ds > 0)[0]])
+        else:
+            return float(-1)
 
     def cast_ray(self, r: Line, l: Line):
         """
@@ -134,3 +124,15 @@ class Lidar(object):
             return float(-1)
         else:
             return float(calc_euclid_distance_2d(tuple(r.p1), tuple(pInt)))
+
+
+if __name__ == "__main__":
+    import time
+    import timeit
+    t = TrackHandler('octo_track')
+    l = Lidar(t, 0, 0, 0, 20)
+    n = 100000
+    t = time.time()
+    #for i in range(0,n):
+    l.fire_lidar()
+    #print((time.time()-t) / n)

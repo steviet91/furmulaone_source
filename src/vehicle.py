@@ -86,14 +86,14 @@ class Vehicle(object):
         """
         # rotate the lidars
         # TODO apply a limit on nRot and min max rotations
+        t = time.time()
         if abs(daRotFront) > 0.0:
             self.lidar_front.rotate_lidar_by_delta(daRotFront, self.lidar_front.x0, self.lidar_front.y0)
         if abs(daRotL) > 0.0:
             self.lidar_left.rotate_lidar_by_delta(daRotL, self.lidar_left.x0, self.lidar_left.y0)
         if abs(daRotR) > 0.0:
             self.lidar_right.rotate_lidar_by_delta(daRotR, self.lidar_right.x0, self.lidar_right.y0)
-
-        # fire the lidars
+        
         self.lidar_front.fire_lidar()
         self.lidar_left.fire_lidar()
         self.lidar_right.fire_lidar()
