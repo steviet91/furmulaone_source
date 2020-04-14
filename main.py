@@ -34,6 +34,10 @@ class GamePad(object):
                 try:
                     events = get_gamepad()
                     for event in events:
+                        if event.code == "BTN_NORTH":
+                            self.quit_requested = True
+                        if event.code == "BTN_EAST":
+                            self.reset_requested = True
                         if event.code == "ABS_X":
                             self.aSteeringWheelDemand = max(-360, min(360, event.state / 12000 * 360))  # assume 12000 is max
                             # print('aSteeringWheelDemand: ', event.state,self.aSteeringWheelDemand)
@@ -47,49 +51,50 @@ class GamePad(object):
                     self.aSteeringWheelDemand = 0.0
                     self.rBrakeDemand = 0.0
                     self.rThrottleDemand = 0.0
-                    # pass # We still need to check keyboard events in case of q/r being pressed
-            # Check the keyboard regardless (so we can listen for reset / quit requests)
-            events = get_key()
-            if events:
-                for event in events:
-                    if event.code == "KEY_Q":
-                        self.quit_requested = True
-                    if event.code == "KEY_R":
-                        self.reset_requested = True
-                    if event.code == "KEY_W":
-                        if event.state > 0:
-                            # Then the key has been pressed (1 ==> key down) or is being pressed (2 ==> held down)
-                            self.rThrottleDemand += self._throttle_brake_delta
-                            self.rBrakeDemand = 0
-                        else:
-                            # Key up
-                            self.rThrottleDemand = 0
-                    if event.code == "KEY_S":
-                        if event.state > 0:
-                            self.rThrottleDemand = 0
-                            self.rBrakeDemand += self._throttle_brake_delta
-                        else:
-                            # Key up
-                            self.rBrakeDemand = 0
-                    if event.code == "KEY_A":
-                        if event.state > 0:
-                            self.aSteeringWheelDemand -= self._steering_delta
-                        else:
-                            # Key up
-                            self.aSteeringWheelDemand = 0
-                    if event.code == "KEY_D":
-                        if event.state > 0:
-                            self.aSteeringWheelDemand += self._steering_delta
-                        else:
-                            # Key up
-                            self.aSteeringWheelDemand = 0
-                    # Make sure the demands are sensible
-                    self.rThrottleDemand = max(0, min(1, self.rThrottleDemand))
-                    self.rBrakeDemand = max(0, min(1, self.rBrakeDemand))
-                    self.aSteeringWheelDemand = max(-360, min(360, self.aSteeringWheelDemand))
-                    # print('rThrottleDemand: ', self.rThrottleDemand)
-                    # print('rBrakeDemand: ', self.rBrakeDemand)
-                    # print('aSteeringWheelDemand: ', self.aSteeringWheelDemand)
+                    pass # We still need to check keyboard events in case of q/r being pressed
+            else:
+                # Check the keyboard regardless (so we can listen for reset / quit requests)
+                events = get_key()
+                if events:
+                    for event in events:
+                        if event.code == "KEY_Q":
+                            self.quit_requested = True
+                        if event.code == "KEY_R":
+                            self.reset_requested = True
+                        if event.code == "KEY_W":
+                            if event.state > 0:
+                                # Then the key has been pressed (1 ==> key down) or is being pressed (2 ==> held down)
+                                self.rThrottleDemand += self._throttle_brake_delta
+                                self.rBrakeDemand = 0
+                            else:
+                                # Key up
+                                self.rThrottleDemand = 0
+                        if event.code == "KEY_S":
+                            if event.state > 0:
+                                self.rThrottleDemand = 0
+                                self.rBrakeDemand += self._throttle_brake_delta
+                            else:
+                                # Key up
+                                self.rBrakeDemand = 0
+                        if event.code == "KEY_A":
+                            if event.state > 0:
+                                self.aSteeringWheelDemand -= self._steering_delta
+                            else:
+                                # Key up
+                                self.aSteeringWheelDemand = 0
+                        if event.code == "KEY_D":
+                            if event.state > 0:
+                                self.aSteeringWheelDemand += self._steering_delta
+                            else:
+                                # Key up
+                                self.aSteeringWheelDemand = 0
+                        # Make sure the demands are sensible
+                        self.rThrottleDemand = max(0, min(1, self.rThrottleDemand))
+                        self.rBrakeDemand = max(0, min(1, self.rBrakeDemand))
+                        self.aSteeringWheelDemand = max(-360, min(360, self.aSteeringWheelDemand))
+                        # print('rThrottleDemand: ', self.rThrottleDemand)
+                        # print('rBrakeDemand: ', self.rBrakeDemand)
+                        # print('aSteeringWheelDemand: ', self.aSteeringWheelDemand)
 
             sleep(0.0001)
 
