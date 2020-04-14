@@ -23,6 +23,7 @@ class TrackHandler(object):
         self.bNewLap = False
         self.bCarNearStartLine = False
         self.tLap = []
+        self.tLapPen = 0.0
         self.tLapStart = time.time()
         self.NLapsComplete = -1
 
@@ -30,16 +31,22 @@ class TrackHandler(object):
         """
             New lap has started, log the lap times
         """
+
         if self.NLapsComplete == -1:
             # this is the first lap
             self.tLapStart = time.time()
             self.NLapsComplete += 1
-
+            print('First Lap started')
         else:
             # standard new lap - set the time and roll over laps complete
-            t = time.time()
-            self.tLap.extend(t - self.tLapStart)
             self.NLapsComplete += 1
+            print('New Lap')
+            t = time.time()
+            self.tLap.append(t - self.tLapStart + self.tLapPen)
+            print('Lap time: {:.2f} s'.format(self.tLap[-1]))
+            print('Penalties: {:.2f} s'.format(self.tLapPen))
+
+            self.tLapPen = 0.0
 
     def check_new_lap(self, xC: float, yC: float):
         """
@@ -69,6 +76,12 @@ class TrackHandler(object):
         # if new lap then roll update the lap information
         if self.bNewLap:
             self.start_new_lap()
+
+    def add_lap_time_penalty(self, t: float):
+        """
+            Accumalate a lap time penalty, will be reset on new lap
+        """
+        self.tLapPen += t
 
     def get_line_idxs_for_collision(self, c: Circle):
         """

@@ -25,7 +25,7 @@ class Lidar(object):
 
         # set the properties of the lidar
         self.NRays = 20  # the number of rays in the lidar
-        self.xLidarRange = 20  # range in meters
+        self.xLidarRange = float(20)  # range in meters
 
         # initialise the lidar rays
         self.initialise_rays()
@@ -116,23 +116,28 @@ class Lidar(object):
 
     def cast_ray(self, r: Line, l: Line):
         """
-            Cast the ray r and return the distance to the line l
+            Cast the ray r and return the distance to the line l if less than
+            lidar range
         """
         pInt = get_intersection_point_lineseg_lineseg(l, r, l2_is_ray=True)
 
         if pInt is None:
             return float(-1)
         else:
-            return float(calc_euclid_distance_2d(tuple(r.p1), tuple(pInt)))
+            d = float(calc_euclid_distance_2d(tuple(r.p1), tuple(pInt)))
+            if d <= self.xLidarRange:
+                return d
+            else:
+                # collisiion is out of range
+                return float(-1)
 
 
 if __name__ == "__main__":
     import time
-    import timeit
     t = TrackHandler('octo_track')
     l = Lidar(t, 0, 0, 0, 20)
-    n = 100000
+    n = 1000
     t = time.time()
-    #for i in range(0,n):
-    l.fire_lidar()
-    #print((time.time()-t) / n)
+    for i in range(0,n):
+        l.fire_lidar()
+    print((time.time()-t) * 1000 / n,'ms')
