@@ -262,8 +262,72 @@ def get_intersection_point_lineseg_circle(l: Line, c: Circle):
     else:
         return None
 
-
 def check_for_intersection_lineseg_circle(l: Line, c: Circle):
+    """
+        Check for an intersection between a line segment (finite line) and a circle.
+
+        Checks distance between infinite line and centre of the circle
+        If the distance is greater than the radius, then there's no intersection
+        If the distance is <= radius, checks the finite line segment touches the circle.
+            1. Finds the point on the infinite line that is closest to the circle centre as a fraction of the length of the finite line, 't', as measured from P1->P2
+            2. If radius == distance to line, then returns this point as the only intersection
+            3. If radius > distance to line, then finds the two intersections, again as fractions of the length of the finite line
+                - Find the length of half the chord of the circle cut by the line (simple trig, eqn below)
+                - Divide it by the length of the finite line to get it as a t' value
+                - Adds / subtracts this value to the 't' that measures the point closest to the circle centre
+                - If either of these 't' values is 0 <= t <=1, adds it to the list of [ts] returned, and returns True
+                - If neither are between 0-1, returns False
+
+        :returns: Whether there's an intersection, list of 't' values, where t is the ratio along the line l of the intersection
+        :rtype: bool, list
+    """
+    dy = l.y2 - l.y1
+    dx = l.x2 - l.x1
+    # Using formula from wikipedia (work with distance squared to save calculating roots as it's slow): 
+    d_numerator = ((dy * c.x0) - (dx * c.y0) + (l.x2 * l.y1) - (l.y2 * l.x1))
+    d_denominator_sq = dy*dy + dx*dx
+    d_sq = d_numerator * d_numerator / d_denominator_sq
+    # Check whether the distance from the circle centre to the line is <= circle radius (again, work with squared values)
+    r2 = c.r*c.r
+    if d_sq > r2:
+        # Circle centre further from infinite line than circle radius ==> no intersection
+        return False, None
+    
+    # Vector from line p1 to circle centre
+    dxc = c.x0 - l.x1
+    dyc = c.y0 - l.y1
+    # Line dotted with itself
+    l2 = (dx * dx) + (dy * dy)
+    # Ratio of line segment from P1 to clostest point to circle centre
+    # (Dot product of line and vector from p1 to the circle centre) / (line dotted with itself)
+    t_centre_normal = (dx * dxc + dy * dyc) / l2
+    if d_sq == r2:
+        # Then it's tangent
+        # Intersection point = closest point ￼on the line to the circle centre
+        # Ensure the intersection point is within the segment
+        if t_centre_normal <= 1:
+            # Then it's within the segment, so we have an intersection
+            return True, [t_centre_normal]
+        else:
+            return False, None
+    # If we get here then the infinite line passes through the circle ==> intersects twice
+    # Length of chord of a circle, a = 2.sqrt(r2 - d_sq), so half length = sqrt(r2 - d_sq)
+    half_chord_length_sq = r2 - d_sq
+    t_half_chord_length = np.sqrt(half_chord_length_sq / l2)
+    # 't' of the roots = t_centre_normal +/- half chord length
+    t_smaller = t_centre_normal - t_half_chord_length
+    t_larger = t_centre_normal + t_half_chord_length
+    # Ensure they're within the line segment
+    ts = []
+    for t in [t_smaller, t_larger]:
+        if t >= 0 and t <= 1:
+            ts.append(t)
+    if len(ts) == 0:
+        return False, None
+    # If we get here, we've got roots!
+    return True, ts
+
+def check_for_intersection_lineseg_circle_old(l: Line, c: Circle):
     """
         Check for an intersection between a line segment (finite line) and a circle.
 
