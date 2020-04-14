@@ -30,12 +30,12 @@ class DriverInputsRecv(object):
         # initialise some variables
         self.NMessageCounter = 0
         self.tMessageTimeStamp = None
-        self.buff_len = self.config['buff_len']
+        self.msg_len = self.config['msg_len']
 
         # run the socket process
         self.set_pipe, self.get_pipe = Pipe()
         self.run_proc = True
-        self.sock_proc = Process(target='self.run_recv',
+        self.sock_proc = Process(target=self.run_recv,
                                     name='DriverInputRecvProc',
                                     args=(self.set_pipe,),
                                     daemon=True)
@@ -52,6 +52,7 @@ class DriverInputsRecv(object):
 
         self.sock.bind((self.config['ip_addr'], self.config['ip_port']))
         self.sock.settimeout(self.config['sock_timeout'])
+        self.sock.setblocking(1)
 
     def run_recv(self, set_pipe):
         """
@@ -62,13 +63,13 @@ class DriverInputsRecv(object):
             if set_pipe.poll():
                 # the only information we should get here is a boolean to
                 # stop running the process
-                if set_pipe.recv(self.buff_len):
+                if set_pipe.recv():
                     self.run_proc = False
 
             # now check the network socket
             try:
-                data, addr = sock.recvfrom()
-                if len(data) == self.buff_len:
+                data = self.sock.recv(1024)
+                if len(data) == self.msg_len:
                     self.process_recv_data(data, set_pipe)
             except socket.timeout:
                 pass
@@ -90,7 +91,7 @@ class DriverInputsRecv(object):
             Extract the necessary information from the message
         """
         # upack the message - note looking for a static message type
-        data = struct.unpack('@I@d@d@d@d@d@d@d@c@c', data)
+        data = struct.unpack('@Iddddddd??', data)
 
         # check the message counter
         NMessageCounter = data[0]
@@ -111,8 +112,8 @@ class DriverInputsRecv(object):
             self.tMessageTimeStamp = data[1]
 
         # update the input dict and send throug the pipe
-        data_dict = {'rThrottlePedalDemand': data[2],
-                        'rBrakePedalDemand': data[3],
+        data_dict = {'rThrottlePedalDemanded': data[2],
+                        'rBrakePedalDemanded': data[3],
                         'aSteeringWheelDemanded': data[4],
                         'aLidarFront': data[5],
                         'aLidarLeft': data[6],
@@ -150,15 +151,15 @@ class DriverInputsSend(object):
             self.config = json.load(f)
 
         # set up the variables
-        self.data_dict = {'rThrottlePedalDemand': 0.0,
-                        'rBrakePedalDemand': 0.0,
+        self.data_dict = {'rThrottlePedalDemanded': 0.0,
+                        'rBrakePedalDemanded': 0.0,
                         'aSteeringWheelDemanded': 0.0,
                         'aLidarFront': 0.0,
                         'aLidarLeft': 0.0,
                         'aLidarRight': 0.0,
                         'bResetCar': False,
                         'bQuit': False}
-        self.NMessageCounter = np.array([0], dtype=np.uint32) # np will auto rollover when limit of uin32 is reached
+        self.NMessageCounter = np.array([0], dtype=np.uint64) # np will auto rollover when limit of uin32 is reached
         self.tMessageTimeStamp = None
 
         # initialise the network
@@ -175,13 +176,13 @@ class DriverInputsSend(object):
         """
             Set the value of the throttle demand
         """
-        self.data_dict['rThrottlePedalDemand'] = rThrottleDemanded
+        self.data_dict['rThrottlePedalDemanded'] = rThrottleDemanded
 
-    def set_brake(self, rBrakePedalDemanded: float):
+    def set_brake(self, rBrakePedalDemandeded: float):
         """
             Set the value of the brake demand
         """
-        self.data_dict['rBrakePedalDemand'] = rBrakePedalDemanded
+        self.data_dict['rBrakePedalDemanded'] = rBrakePedalDemandeded
 
     def set_steering(self, aSteeringWheelDemanded: float):
         """
@@ -226,8 +227,9 @@ class DriverInputsSend(object):
         # pack up the data
         raw_data = [ v for v in  self.data_dict.values() ]
         self.tMessageTimeStamp = time.time()
-        data = [self.NMessageCounter, self.tMessageTimeStamp] + raw_data
-        data = struct.pack('@I@d@d@d@d@d@d@d@c@c', data)
+        data = [self.NMessageCounter[0], self.tMessageTimeStamp] + raw_data
+        print(data)
+        data = struct.pack('@Iddddddd??', *data)
 
         # send the data
         self.sock.sendto(data, (self.config['ip_addr'], self.config['ip_port']))

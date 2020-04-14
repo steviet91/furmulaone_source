@@ -4,6 +4,7 @@ from .geom import Line
 from .geom import Circle
 from .geom import get_intersection_point_lineseg_lineseg
 from .geom import calc_euclid_distance_2d
+from .geom import rotate_point
 import time
 #from multiprocessing import Pool
 
@@ -67,6 +68,9 @@ class Lidar(object):
         """
         for r in self.rays:
             r.rotate_line_by_delta(daRot, cX, cY)
+        pNew = rotate_point(cX, cY, daRot, np.array([self.x0, self.y0]))
+        self.x0 = pNew[0]
+        self.y0 = pNew[1]
 
     def translate_lidars_by_delta(self, dX: float, dY: float):
         """
