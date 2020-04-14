@@ -97,7 +97,11 @@ class Vis(object):
 
             # calcuate the velocity delta between the car and camera
             if bElapsedTimeAvailable:
-                xdotCameraVehicle = (xCameraVehicle - self.xCameraVehicle) / tElapsed
+                if tElapsed != 0.0:
+                    xdotCameraVehicle = (xCameraVehicle - self.xCameraVehicle) / tElapsed
+                else:
+                    # div by zero protection
+                    xdotCameraVehicle = 0.0
                 self.xCameraVehicle = xCameraVehicle
             else:
                 xdotCameraVehicle = 0.0
@@ -160,6 +164,8 @@ class Vis(object):
                 cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.lidarColour)
                 #pos = (r.p1 + r.v_hat * lidar.collision_array[i] / 2 ) / self.img_scale + self.cameraPosOrigin
                 #cv.putText(self.show_img, '{:.2f} m'.format(lidar.collision_array[i]), tuple(pos.astype(np.int32)), cv.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), thickness)
+        p0 = np.array([lidar.collisionCircle.x0, lidar.collisionCircle.y0]) / self.img_scale + self.cameraPosOrigin - self.cameraPos
+        cv.circle(self.show_img, tuple(p0.astype(np.int32)), int(lidar.collisionCircle.r / self.img_scale), (255, 0, 0))
 
 
     def draw_track(self):

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import csv
 # small script to create an octogon shaped track
 
-IN_RAD = 1000 # m
+IN_RAD = 200 # m
 TRACK_WIDTH = 9 # m
 OUT_RAD = IN_RAD + TRACK_WIDTH
 
@@ -31,4 +31,3 @@ with open('../data/track/octo_track_OUT.csv', 'w', newline = '') as f:
     writer = csv.writer(f, delimiter = ',')
     for i in range(0,8):
         writer.writerow([out_track_points[i,0], out_track_points[i,1]])
-

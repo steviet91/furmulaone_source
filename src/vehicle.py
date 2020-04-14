@@ -93,7 +93,7 @@ class Vehicle(object):
             self.lidar_left.rotate_lidar_by_delta(daRotL, self.lidar_left.x0, self.lidar_left.y0)
         if abs(daRotR) > 0.0:
             self.lidar_right.rotate_lidar_by_delta(daRotR, self.lidar_right.x0, self.lidar_right.y0)
-        
+
         self.lidar_front.fire_lidar()
         self.lidar_left.fire_lidar()
         self.lidar_right.fire_lidar()
@@ -161,6 +161,9 @@ class Vehicle(object):
 
             # reset the vehicle states
             self.reset_states()
+
+            # add a lap time penalty in the track
+            self.track.add_lap_time_penalty(10.0)
 
     def apply_manual_translation(self, dX: float, dY):
         """
@@ -291,9 +294,14 @@ class Vehicle(object):
             tNow = time.time()
             tElapsed = tNow - self.tLastInputUpdate
             self.tLastInputUpdate = tNow
-            drThrottlePedal = (rThrottlePedalDemand - self.rThrottlePedal) / tElapsed
-            drBrakePedal = (rBrakePedalDemand - self.rBrakePedal) / tElapsed
-            nSteeringWheel = (aSteeringWheelDemand - self.aSteeringWheel) / tElapsed
+            if tElapsed != 0.0:
+                drThrottlePedal = (rThrottlePedalDemand - self.rThrottlePedal) / tElapsed
+                drBrakePedal = (rBrakePedalDemand - self.rBrakePedal) / tElapsed
+                nSteeringWheel = (aSteeringWheelDemand - self.aSteeringWheel) / tElapsed
+            else:
+                drThrottlePedal = 0.0
+                drBrakePedal = 0.0
+                nSteeringWheel = 0.0
         # update throttle
         if drThrottlePedal < 0:
             self.rThrottlePedal -= min(abs(drThrottlePedal), self.config['drThrottlePedalMax']) * tElapsed

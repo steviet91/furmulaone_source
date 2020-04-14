@@ -64,45 +64,32 @@ def main():
         if keyboard.is_pressed('r'):
             veh.reset_states()
             veh.reset_vehicle_position()
-        # set the driver inputs
+
+        # set driver inputs
         veh.set_driver_inputs(gp.rThrottleDemand, gp.rBrakeDemand, gp.aSteeringWheelDemand)
 
         # Update the dynamics
-        t = time.time()
         veh.update_long_dynamics()
-        #print('Long:',time.time()-t)
-        t = time.time()
         veh.update_lat_dynamics()
-        #print('Lat:',time.time()-t)
-        t = time.time()
+
+        # update vehicle position
         veh.update_position()
-        #print('Pos:',time.time()-t)
-        t = time.time()
+
+        # check for collision with track model
         veh.check_for_vehicle_collision()
-        #print('Collision:',time.time()-t)
-        t = time.time()
+
+        # fire the lidars
         veh.update_lidars()
-        #print('Lidars:',time.time()-t)
-        t = time.time()
-        vis.update_camera_position()
-        #print('Update Camera:',time.time()-t)
-        t = time.time()
+
+        # draw the visualisation
         vis.draw_car()
-        #print('Draw Car:',time.time()-t)
-        t = time.time()
-        vis.draw_data()
-        #print('Draw Data:',time.time()-t)
-        t = time.time()
         vis.draw_track()
-        #print('Draw track:',time.time()-t)
-        t = time.time()
         vis.draw_all_lidars()
-        #print('Draw lidars:',time.time()-t)
-        t = time.time()
         vis.render_image()
-        #print('Render:',time.time()-t)
-        t = time.time()
-        sleep(0.05)
+        vis.update_camera_position()
+
+        # check the lap data
+        track.check_new_lap(veh.posVehicle[0], veh.posVehicle[1])
 
 
 if __name__ == "__main__":
