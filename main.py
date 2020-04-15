@@ -2,6 +2,7 @@ from src.vehicle import Vehicle
 from src.visualiser import Vis
 from src.track import TrackHandler
 from src.network import DriverInputsRecv
+from src.network import VehicleOutputsSend
 from time import sleep
 import time
 
@@ -9,6 +10,7 @@ import time
 def main():
     # instantiate the objects
     drv_in = DriverInputsRecv()
+    veh_out = VehicleOutputsSend()
     track = TrackHandler('octo_track')
     veh = Vehicle(1, track, 60, 60 ,60)
     vis = Vis(track, veh)
@@ -62,6 +64,16 @@ def main():
 
         # check the lap data
         track.check_new_lap(veh.posVehicle[0], veh.posVehicle[1])
+
+        # send the vehicle output dat aacross the network
+        veh_out.set_vehicle_sensors(veh.get_vehicle_sensors())
+        veh_out.set_lidar_data(veh.lidar_front.collision_array,
+                                veh.lidar_left.collision_array,
+                                veh.lidar_right.collision_array)
+        veh_out.send_data()
+
+        sleep(0.01)
+
 
 
 if __name__ == "__main__":

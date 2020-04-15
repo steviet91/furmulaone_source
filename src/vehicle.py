@@ -508,7 +508,7 @@ class Vehicle(object):
                 'rThrottlePedal': self.rThrottlePedal, 'rBrakePedal': self.rBrakePedal,
                 'aSteeringWheel': self.aSteeringWheel, 'nYaw': self.nYaw,
                 'xVehicle': self.posVehicle[0], 'yVehicle': self.posVehicle[1],
-                'aLidarRotL': self.aLidarRotL, 'aLidarRotR': self.aLidarRotR, 'aLidarRotFront': self.aLidardRotFront}
+                'aLidarRotL': self.aLidarRotL, 'aLidarRotR': self.aLidarRotR, 'aLidarRotFront': self.aLidarRotFront}
 
     def update_position(self):
         """

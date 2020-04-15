@@ -1,5 +1,6 @@
 from time import sleep
 from src.network import DriverInputsSend
+from src.network import VehicleOutputsRecv
 from inputs import get_gamepad, get_key, devices
 from threading import Thread
 
@@ -109,6 +110,7 @@ class GamePad(object):
 def main():
     gp = GamePad()
     s = DriverInputsSend()
+    vo = VehicleOutputsRecv()
 
     while True:
         # check quit
@@ -116,6 +118,7 @@ def main():
             s.set_quit(True)
             s.send_data()
             gp.exit_thread()
+            vo.exit()
             break
 
         # check reset
@@ -134,8 +137,12 @@ def main():
         s.set_lidar_angle_left(gp.lidar_rot)
         s.set_lidar_angle_right(gp.lidar_rot)
 
+        # send the inputs
         s.send_data()
 
+        # check the ouputs
+        vo.check_network_data()
+        #print(vo.get_all_data())
         sleep(0.01)
 
 if __name__ == "__main__":
