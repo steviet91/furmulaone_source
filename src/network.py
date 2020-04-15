@@ -236,3 +236,26 @@ class DriverInputsSend(object):
 
         # increment the send counter
         self.NMessageCounter += 1
+
+
+class VehicleOutputsSend(object):
+    """
+        Sends all vehicle data onto udp for the reciever (the driver) to pick up
+    """
+
+    def __init__(self):
+        # find the scripts path
+        import os
+        self.module_path = os.path.dirname(os.path.abspath(__file__))
+
+        # read in the config
+        import json
+        with open(self.module_path + '/../setup/vo_network_config.json','r') as f:
+            self.config = json.load(f)
+
+        self.NMessageCounter = np.array([0], dtype=np.uint64) # np will auto rollover when limit of uin32 is reached
+        self.tMessageTimeStamp = None
+        self.NMessageHeader = np.array([self.config['NMessageHeader'], dtype=np.uin64)
+
+        # initialise the network
+        self.initialise_network()
