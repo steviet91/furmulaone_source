@@ -499,11 +499,16 @@ class Vehicle(object):
 
     def get_vehicle_sensors(self):
         """
-            Returns the vehicle sensors
+            Returns the vehicle sensors for visualisation and sending throug udp to driver
         """
-        return {'vVehicle': self.vVehicle, 'vxVehicle': self.vxVehicle, 'vyVehicle': self.vyVehicle, 'aSlipF': self.aSlipF, 'aSlipR': self.aSlipR,
-                'rThrottlePedal': self.rThrottlePedal, 'rBrakePedal': self.rBrakePedal, 'aSteeringWheel': self.aSteeringWheel, 'nYaw': self.nYaw,
-                'xVehicle': self.posVehicle[0], 'yVehicle': self.posVehicle[1]}
+        return {'gxVehicle': self.gxVehicle, 'gyVehicle': self.gyVehicle,
+                'vxVehicle': self.vxVehicle, 'vyVehicle': self.vyVehicle,
+                'aSlipF': self.aSlipF, 'aSlipR': self.aSlipR,
+                'aBodySlip': self.aBodySlip, 'aYaw': self.aYaw,
+                'rThrottlePedal': self.rThrottlePedal, 'rBrakePedal': self.rBrakePedal,
+                'aSteeringWheel': self.aSteeringWheel, 'nYaw': self.nYaw,
+                'xVehicle': self.posVehicle[0], 'yVehicle': self.posVehicle[1],
+                'aLidarRotL': self.aLidarRotL, 'aLidarRotR': self.aLidarRotR, 'aLidarRotFront': self.aLidardRotFront}
 
     def update_position(self):
         """
