@@ -45,7 +45,7 @@ class TrackHandler(object):
             self.tLap.append(t - self.tLapStart + self.tLapPen)
             print('Lap time: {:.2f} s'.format(self.tLap[-1]))
             print('Penalties: {:.2f} s'.format(self.tLapPen))
-
+            self.tLapStart = time.time()
             self.tLapPen = 0.0
 
     def check_new_lap(self, xC: float, yC: float):
@@ -204,5 +204,5 @@ class Track(object):
 if __name__ == "__main__":
     from .track import Track
     t = Track()
-    t.load_from_csv('octo_track')
+    t.load_from_csv('dodec_track')
     t.pickle_track()
