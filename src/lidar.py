@@ -26,7 +26,7 @@ class Lidar(object):
 
         # set the properties of the lidar
         self.NRays = 20  # the number of rays in the lidar
-        self.xLidarRange = float(20)  # range in meters
+        self.xLidarRange = float(200)  # range in meters
 
         # initialise the lidar rays
         self.initialise_rays()
