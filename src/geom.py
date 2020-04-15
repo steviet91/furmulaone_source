@@ -455,7 +455,18 @@ def calc_euclid_distance_2d(p1: tuple, p2: tuple):
     """
         Returns the euclidian distance between p1 and p2
     """
-    return np.sqrt((float(p2[0]) - float(p1[0]))**2 + (float(p2[1]) - float(p1[1]))**2)
+    return np.sqrt(calc_euclid_distance_2d_sq(p1, p2))
+
+@jit
+def calc_euclid_distance_2d_sq(p1: tuple, p2: tuple):
+    """
+        Returns the square of the euclidian distance between p1 and p2
+
+        Useful as it's much cheaper than calculating the actual distance 
+        (as it save a call to sqrt())
+        and if checking a < b, then a^2 < b^2 will also give the correct value
+    """
+    return (float(p2[0]) - float(p1[0]))**2 + (float(p2[1]) - float(p1[1]))**2
 
 def calc_angle_between_unit_vectors(v1_hat, v2_hat):
     """
