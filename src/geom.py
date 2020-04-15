@@ -175,8 +175,9 @@ def check_for_intersection_lineseg_lineseg(l1: Line, l2: Line, l2_is_ray: bool =
         Returns true if the line provided intersects with provided second line. Logic for the case where l2 is simply a ray
     """
     # calculate the Bezier parameters
-    t = calc_t_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
-    u = calc_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+    # t = calc_t_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+    # u = calc_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+    t, u = calc_t_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
     if t is None or u is None:
         return False, None
     else:
@@ -204,9 +205,37 @@ def get_intersection_point_lineseg_lineseg(l1: Line, l2: Line, l2_is_ray: bool =
         return None
 
 @njit
+def calc_t_u_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float):
+    """
+        Caclulate the Bezier parameters for lines 1 (x/y 1,2) & 2 (x/y 3/4)
+    """
+    # Get deltas which will be reused in both calcs
+    dx12 = x1 - x2
+    dx34 = x3 - x4
+    dy12 = y1 - y2
+    dy34 = y3 - y4
+    # Denominator - same for lines 1 & 2
+    d = (dx12 * dy34) - (dy12 * dx34)
+    if d == 0:
+        # Fail fast, don't worry about numerators & return None for both t & u!
+        return None, None
+    # Numerators
+    dx13 = x1 - x3
+    dy13 = y1 - y3
+    # Line 1
+    n1 = (dx13 * dy34) - (dy13 * dx34)
+    t = n1 / d
+    # Line 2
+    n2 = (dx12 * dy13) - (dy12 * dx13)
+    u = -n2 / d
+    return t, u
+
+@njit
 def calc_t_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float):
     """
         Caclulate the Bezier parameter for line 1 (x/y 1,2)
+
+        Deprecated - replaced by calc_t_u_lineseg_lineseg above
     """
     n = (x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)
     d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
@@ -219,6 +248,8 @@ def calc_t_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float
 def calc_u_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float):
     """
         Calculate the Bezier parameter for line 2 (x/y 3/4)
+
+        Deprecated - replaced by calc_t_u_lineseg_lineseg above
     """
     n = (x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)
     d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
@@ -262,8 +293,72 @@ def get_intersection_point_lineseg_circle(l: Line, c: Circle):
     else:
         return None
 
-
 def check_for_intersection_lineseg_circle(l: Line, c: Circle):
+    """
+        Check for an intersection between a line segment (finite line) and a circle.
+
+        Checks distance between infinite line and centre of the circle
+        If the distance is greater than the radius, then there's no intersection
+        If the distance is <= radius, checks the finite line segment touches the circle.
+            1. Finds the point on the infinite line that is closest to the circle centre as a fraction of the length of the finite line, 't', as measured from P1->P2
+            2. If radius == distance to line, then returns this point as the only intersection
+            3. If radius > distance to line, then finds the two intersections, again as fractions of the length of the finite line
+                - Find the length of half the chord of the circle cut by the line (simple trig, eqn below)
+                - Divide it by the length of the finite line to get it as a t' value
+                - Adds / subtracts this value to the 't' that measures the point closest to the circle centre
+                - If either of these 't' values is 0 <= t <=1, adds it to the list of [ts] returned, and returns True
+                - If neither are between 0-1, returns False
+
+        :returns: Whether there's an intersection, list of 't' values, where t is the ratio along the line l of the intersection
+        :rtype: bool, list
+    """
+    dy = l.y2 - l.y1
+    dx = l.x2 - l.x1
+    # Using formula from wikipedia (work with distance squared to save calculating roots as it's slow): 
+    d_numerator = ((dy * c.x0) - (dx * c.y0) + (l.x2 * l.y1) - (l.y2 * l.x1))
+    d_denominator_sq = dy*dy + dx*dx
+    d_sq = d_numerator * d_numerator / d_denominator_sq
+    # Check whether the distance from the circle centre to the line is <= circle radius (again, work with squared values)
+    r2 = c.r*c.r
+    if d_sq > r2:
+        # Circle centre further from infinite line than circle radius ==> no intersection
+        return False, None
+    
+    # Vector from line p1 to circle centre
+    dxc = c.x0 - l.x1
+    dyc = c.y0 - l.y1
+    # Line dotted with itself
+    l2 = (dx * dx) + (dy * dy)
+    # Ratio of line segment from P1 to clostest point to circle centre
+    # (Dot product of line and vector from p1 to the circle centre) / (line dotted with itself)
+    t_centre_normal = (dx * dxc + dy * dyc) / l2
+    if d_sq == r2:
+        # Then it's tangent
+        # Intersection point = closest point ￼on the line to the circle centre
+        # Ensure the intersection point is within the segment
+        if t_centre_normal <= 1:
+            # Then it's within the segment, so we have an intersection
+            return True, [t_centre_normal]
+        else:
+            return False, None
+    # If we get here then the infinite line passes through the circle ==> intersects twice
+    # Length of chord of a circle, a = 2.sqrt(r2 - d_sq), so half length = sqrt(r2 - d_sq)
+    half_chord_length_sq = r2 - d_sq
+    t_half_chord_length = np.sqrt(half_chord_length_sq / l2)
+    # 't' of the roots = t_centre_normal +/- half chord length
+    t_smaller = t_centre_normal - t_half_chord_length
+    t_larger = t_centre_normal + t_half_chord_length
+    # Ensure they're within the line segment
+    ts = []
+    for t in [t_smaller, t_larger]:
+        if t >= 0 and t <= 1:
+            ts.append(t)
+    if len(ts) == 0:
+        return False, None
+    # If we get here, we've got roots!
+    return True, ts
+
+def check_for_intersection_lineseg_circle_old(l: Line, c: Circle):
     """
         Check for an intersection between a line segment (finite line) and a circle.
 
@@ -391,7 +486,18 @@ def calc_euclid_distance_2d(p1: tuple, p2: tuple):
     """
         Returns the euclidian distance between p1 and p2
     """
-    return np.sqrt((float(p2[0]) - float(p1[0]))**2 + (float(p2[1]) - float(p1[1]))**2)
+    return np.sqrt(calc_euclid_distance_2d_sq(p1, p2))
+
+@jit
+def calc_euclid_distance_2d_sq(p1: tuple, p2: tuple):
+    """
+        Returns the square of the euclidian distance between p1 and p2
+
+        Useful as it's much cheaper than calculating the actual distance 
+        (as it save a call to sqrt())
+        and if checking a < b, then a^2 < b^2 will also give the correct value
+    """
+    return (float(p2[0]) - float(p1[0]))**2 + (float(p2[1]) - float(p1[1]))**2
 
 def calc_angle_between_unit_vectors(v1_hat, v2_hat):
     """

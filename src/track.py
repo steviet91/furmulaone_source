@@ -2,7 +2,7 @@ import numpy as np
 from .geom import Line
 from .geom import rotate_point
 from .geom import Circle
-from .geom import calc_euclid_distance_2d
+from .geom import calc_euclid_distance_2d_sq
 from .geom import check_for_intersection_lineseg_circle
 import time
 import os
@@ -98,11 +98,12 @@ class TrackHandler(object):
                 - Has at least one vertex that lies within the circles radius
                 - That intersects at least once with the circle
         """
+        r2 = c.r**2
         # check the distance of the points to the circle's centre
-        if calc_euclid_distance_2d(l.p1, (c.x0, c.y0)) <= c.r:
+        if calc_euclid_distance_2d_sq(l.p1, (c.x0, c.y0)) <= r2:
             # p1 lies within the circumference of the circle
             return True
-        elif calc_euclid_distance_2d(l.p2, (c.x0, c.y0)) <= c.r:
+        elif calc_euclid_distance_2d_sq(l.p2, (c.x0, c.y0)) <= r2:
             # p2 lies within the circumference of the circle
             return True
         else:
