@@ -26,7 +26,31 @@ def test_circle_line_intersection():
     print("Benchmarking took {}s in total, so ~{}s per function call".format(run_time, run_time/loop_limit))
     # bIntersect, ts = check_for_intersection_lineseg_circle_alt(line, circle)
     print("Return values: {}, {}".format(bIntersect,  ts))
-    # for original check_for_intersection_lineseg_circle, Benchmarking took 0.675400972366333s in total, so ~6.75400972366333e-05s per function call
+    # Performance improvement: ~100x faster if infinite line doesn't intersect, 50x faster if it does.
+
+def test_t_u_lineseg_lineseg():
+    # Import the function & required stuff
+    from geom import Line, calc_t_lineseg_lineseg, calc_u_lineseg_lineseg, calc_t_u_lineseg_lineseg
+    # Create a line and circle
+    l1 = Line((-200,-100), (200,10))
+    l2= Line((100,-100), (100,500))
+    # Benchmark it!
+    start_time = time.time()
+    for i in range(loop_limit):
+        t = calc_t_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+        u = calc_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+        # t, u = calc_t_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+    end_time = time.time()
+    run_time = end_time - start_time
+    print("Benchmarking took {}s in total, so ~{}s per function call".format(run_time, run_time/loop_limit))
+    # bIntersect, ts = check_for_intersection_lineseg_circle_alt(line, circle)
+    print("Return values: {}, {}".format(t,  u))
+    # Performance improvement: ~35% faster.
+
+
+
+
 
 if __name__ == "__main__":
-    test_circle_line_intersection()
+    # test_circle_line_intersection()
+    test_t_u_lineseg_lineseg()

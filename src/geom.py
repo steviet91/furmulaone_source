@@ -204,9 +204,37 @@ def get_intersection_point_lineseg_lineseg(l1: Line, l2: Line, l2_is_ray: bool =
         return None
 
 @njit
+def calc_t_u_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float):
+    """
+        Caclulate the Bezier parameters for lines 1 (x/y 1,2) & 2 (x/y 3/4)
+    """
+    # Get deltas which will be reused in both calcs
+    dx12 = x1 - x2
+    dx34 = x3 - x4
+    dy12 = y1 - y2
+    dy34 = y3 - y4
+    # Denominator - same for lines 1 & 2
+    d = (dx12 * dy34) - (dy12 * dx34)
+    if d == 0:
+        # Fail fast, don't worry about numerators & return None for both t & u!
+        return None, None
+    # Numerators
+    dx13 = x1 - x3
+    dy13 = y1 - y3
+    # Line 1
+    n1 = (dx13 * dy34) - (dy13 * dx34)
+    t = n1 / d
+    # Line 2
+    n2 = (dx12 * dy13) - (dy12 * dx13)
+    u = -n2 / d
+    return t, u
+
+@njit
 def calc_t_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float):
     """
         Caclulate the Bezier parameter for line 1 (x/y 1,2)
+
+        Deprecated - replaced by calc_t_u_lineseg_lineseg above
     """
     n = (x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)
     d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
@@ -219,6 +247,8 @@ def calc_t_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float
 def calc_u_lineseg_lineseg(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float):
     """
         Calculate the Bezier parameter for line 2 (x/y 3/4)
+
+        Deprecated - replaced by calc_t_u_lineseg_lineseg above
     """
     n = (x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)
     d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
