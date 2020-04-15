@@ -10,13 +10,16 @@ from .geom import calc_angle_between_unit_vectors
 from .lidar import Lidar
 
 class Vehicle(object):
-    def __init__(self, id: int, track: Track):
+    def __init__(self, id: int, track: Track, aLidarFOVFront: float, aLidarFOVL: float, aLidarFOVR: float):
         """
             Initialise the vehicle object
         """
         # save the arguments
         self.id = id
         self.track = track
+        self.aLidarFOVFront = aLidarFOVFront
+        self.aLidarFOVL = aLidarFOVL
+        self.aLidarFOVR = aLidarFOVR
 
         # Get the module path
         self.module_path = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +33,7 @@ class Vehicle(object):
         self.tLastLongUpdate = None
         self.tLastLatUpdate = None
         self.tLastPosUpdate = None
+        self.tLastLidarUpdate = None
 
         # create the car corner point offsets
         self.carFLOffset = np.array([self.config['xVehicleLength'] * self.config['rCOGLongR'], -0.5 * self.config['xVehicleWidth']])
@@ -41,7 +45,7 @@ class Vehicle(object):
         self.initialise_vehicle_properties()
 
         # create the lidars
-        self.initialise_lidars(60, 60, 60)
+        self.initialise_lidars()
 
         # initialise the vehicle states
         self.reset_states()
@@ -52,51 +56,113 @@ class Vehicle(object):
         # create lidar object
         self.lidars = None
 
-    def initialise_lidars(self, aFOVL: float, aFOVR: float, aFOVFront: float, aRotL: float = 0.0, aRotR: float = 0.0, aRotFront: float = 0.0):
+    def initialise_lidars(self, aRotL: float = 0.0, aRotR: float = 0.0, aRotFront: float = 0.0):
         """
             Set up the LIDAR objects
         """
+
         # convert angles to rad
-        aFOVFront = aFOVFront * np.pi / 180
-        aFOVL = aFOVL * np.pi / 180
-        aFOVR = aFOVR * np.pi / 180
-        aRotFront = aRotFront * np.pi / 180
-        aRotL = aRotL * np.pi / 180
-        aRotR = aRotR * np.pi / 180
+        aFOVFront = self.aLidarFOVFront * np.pi / 180
+        aFOVL = self.aLidarFOVL * np.pi / 180
+        aFOVR = self.aLidarFOVR * np.pi / 180
+
+        # calculate the maximum rotation angle based on FOV
+        self.aRotLimFront = self.config['aLidarRotMax'] * np.pi / 180 - aFOVFront / 2
+        self.aRotLimL = self.config['aLidarRotMax'] * np.pi / 180 - aFOVL / 2
+        self.aRotLimR = self.config['aLidarRotMax'] * np.pi / 180 - aFOVR / 2
+
+        # determine the initial rotation angles
+        self.aLidarRotFront = max(-1 * self.aRotLimFront, min(self.aRotLimFront, aRotFront * np.pi / 180))
+        self.aLidarRotL = max(-1 * self.aRotLimL, min(self.aRotLimL, aRotL * np.pi / 180))
+        self.aLidarRotR = max(-1 * self.aRotLimR, min(self.aRotLimR, aRotR * np.pi / 180))
 
         # set up the front lidar
-        self.aLidarF = 0.0 + aRotFront
+        self.aLidarF = 0.0
         self.lidar_front = Lidar(self.track, self.aLidarF, self.carFLOffset[0], 0, aFOVFront)
 
         # set up the left lidar
-        self.aLidarL = -1.0 * np.pi / 2.0 + aRotL
+        self.aLidarL = -1.0 * np.pi / 2.0
         x0 = self.carFLOffset[0] - self.config['xVehicleLength'] / 2
         y0 = self.carFLOffset[1]
         self.lidar_left = Lidar(self.track, self.aLidarL, x0, y0, aFOVL)
 
         # set up the right lidar
-        self.aLidarR = np.pi / 2.0 + aRotR
+        self.aLidarR = np.pi / 2.0
         x0 = self.carFROffset[0] - self.config['xVehicleLength'] / 2
         y0 = self.carFROffset[1]
         self.lidar_right = Lidar(self.track, self.aLidarR, x0, y0, aFOVR)
 
-    def update_lidars(self, daRotFront: float=0.0, daRotL: float=0.0, daRotR: float=0.0):
+        # Apply the inital rotations
+        self.lidar_front.rotate_lidar_by_delta(self.aLidarRotFront, self.lidar_front.x0, self.lidar_front.y0)
+        self.lidar_left.rotate_lidar_by_delta(self.aLidarRotL, self.lidar_left.x0, self.lidar_left.y0)
+        self.lidar_right.rotate_lidar_by_delta(self.aLidarRotR, self.lidar_right.x0, self.lidar_right.y0)
+
+
+    def update_lidars(self, aRotFront: float=0.0, aRotL: float=0.0, aRotR: float=0.0):
         """
             Apply any rotation to the lidar (relative to the vehicle) and fire the liders
         """
-        # rotate the lidars
-        # TODO apply a limit on nRot and min max rotations
-        t = time.time()
-        if abs(daRotFront) > 0.0:
-            self.lidar_front.rotate_lidar_by_delta(daRotFront, self.lidar_front.x0, self.lidar_front.y0)
-        if abs(daRotL) > 0.0:
-            self.lidar_left.rotate_lidar_by_delta(daRotL, self.lidar_left.x0, self.lidar_left.y0)
-        if abs(daRotR) > 0.0:
-            self.lidar_right.rotate_lidar_by_delta(daRotR, self.lidar_right.x0, self.lidar_right.y0)
+        # apply the rotations
+        if self.tLastLidarUpdate is None:
+            self.tLastLidarUpdate = time.time()
+            tElapsed = 0.0
+        else:
+            tNow = time.time()
+            tElapsed = tNow - self.tLastLidarUpdate
+            self.tLastLidarUpdate = tNow
 
+        if tElapsed > 0.0:
+            # front
+            daRotFrontRaw = (aRotFront * np.pi / 180 - self.aLidarRotFront) / tElapsed
+            if abs(daRotFrontRaw) > 0.0:
+                daRotFront = self.process_lidar_rotation(daRotFrontRaw, self.aLidarRotFront, self.aRotLimFront, tElapsed)
+                if abs(daRotFront) > 0.0:
+                    self.lidar_front.rotate_lidar_by_delta(daRotFront, self.lidar_front.x0, self.lidar_front.y0)
+                    self.aLidarRotFront += daRotFront
+
+            # left
+            daRotLRaw = (aRotL * np.pi / 180 - self.aLidarRotL) / tElapsed
+            if abs(daRotLRaw) > 0.0:
+                daRotL = self.process_lidar_rotation(daRotLRaw, self.aLidarRotL, self.aRotLimL, tElapsed)
+                if abs(daRotL) > 0.0:
+                    self.lidar_left.rotate_lidar_by_delta(daRotL, self.lidar_left.x0, self.lidar_left.y0)
+                    self.aLidarRotL += daRotL
+
+            # right
+            daRotRRaw = (aRotR * np.pi / 180 - self.aLidarRotR) / tElapsed
+            if abs(daRotRRaw) > 0.0:
+                daRotR = self.process_lidar_rotation(daRotRRaw, self.aLidarRotR, self.aRotLimR, tElapsed)
+                if abs(daRotR) > 0.0:
+                    self.lidar_right.rotate_lidar_by_delta(daRotR, self.lidar_right.x0, self.lidar_right.y0)
+                    self.aLidarRotR += daRotR
+
+        # fire the lidar rays
         self.lidar_front.fire_lidar()
         self.lidar_left.fire_lidar()
         self.lidar_right.fire_lidar()
+
+    def process_lidar_rotation(self, daRotRaw: float, aRotCurrent: float, aRotMax: float, tElapsed: float):
+        """
+            Process the lidar rotation and return a delta angle
+        """
+        # limit the rate of change
+        if abs(daRotRaw) > self.config['daLidarRotMax']:
+            if daRotRaw < 0.0:
+                daRotRaw = -1 * self.config['daLidarRotMax']
+            else:
+                daRotRaw = self.config['daLidarRotMax']
+
+        daRotRaw = daRotRaw * tElapsed
+
+        aRotNew = aRotCurrent + daRotRaw
+
+        if aRotNew < -1* aRotMax:
+            aRotNew = -1 * aRotMax
+        elif aRotNew > aRotMax:
+            aRotNew = aRotMax
+
+        return aRotNew - aRotCurrent
+
 
     def initialise_vehicle_colliders(self):
         """
@@ -254,9 +320,7 @@ class Vehicle(object):
         self.h = Line(tuple(self.posVehicle), (1.0, 0.0))  # provides a unit vector for vehicle heading
         # reinitialise the vehicle colliders
         self.initialise_vehicle_colliders()
-        self.lidar_front.reset_lidar()
-        self.lidar_left.reset_lidar()
-        self.lidar_right.reset_lidar()
+        self.initialise_lidars(aRotL=self.aLidarRotL, aRotR=self.aLidarRotR, aRotFront=self.aLidarRotFront)
 
     def initialise_vehicle_properties(self):
         """
@@ -435,11 +499,16 @@ class Vehicle(object):
 
     def get_vehicle_sensors(self):
         """
-            Returns the vehicle sensors
+            Returns the vehicle sensors for visualisation and sending throug udp to driver
         """
-        return {'vVehicle': self.vVehicle, 'vxVehicle': self.vxVehicle, 'vyVehicle': self.vyVehicle, 'aSlipF': self.aSlipF, 'aSlipR': self.aSlipR,
-                'rThrottlePedal': self.rThrottlePedal, 'rBrakePedal': self.rBrakePedal, 'aSteeringWheel': self.aSteeringWheel, 'nYaw': self.nYaw,
-                'xVehicle': self.posVehicle[0], 'yVehicle': self.posVehicle[1]}
+        return {'gxVehicle': self.gxVehicle, 'gyVehicle': self.gyVehicle,
+                'vxVehicle': self.vxVehicle, 'vyVehicle': self.vyVehicle,
+                'aSlipF': self.aSlipF, 'aSlipR': self.aSlipR,
+                'aBodySlip': self.aBodySlip, 'aYaw': self.aYaw,
+                'rThrottlePedal': self.rThrottlePedal, 'rBrakePedal': self.rBrakePedal,
+                'aSteeringWheel': self.aSteeringWheel, 'nYaw': self.nYaw,
+                'xVehicle': self.posVehicle[0], 'yVehicle': self.posVehicle[1],
+                'aLidarRotL': self.aLidarRotL, 'aLidarRotR': self.aLidarRotR, 'aLidarRotFront': self.aLidarRotFront}
 
     def update_position(self):
         """

@@ -27,5 +27,7 @@
   "CTyreY": 47000.0,
   "rSteering": 20,
   "jVehicleZZ": 2000,
-  "vVehicleStationary":  0.5
+  "vVehicleStationary":  0.5,
+  "daLidarRotMax": 1.57,
+  "aLidarRotMax": 60
 }
