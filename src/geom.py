@@ -175,8 +175,9 @@ def check_for_intersection_lineseg_lineseg(l1: Line, l2: Line, l2_is_ray: bool =
         Returns true if the line provided intersects with provided second line. Logic for the case where l2 is simply a ray
     """
     # calculate the Bezier parameters
-    t = calc_t_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
-    u = calc_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+    # t = calc_t_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+    # u = calc_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
+    t, u = calc_t_u_lineseg_lineseg(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
     if t is None or u is None:
         return False, None
     else:
