@@ -160,7 +160,7 @@ class Track(object):
         # calculate the starting orientation to apply to the track
         # this is based on the vector of the first line in the inner set
         rotLine = Line(tuple(in_raw_points[0, :]), tuple(in_raw_points[1, :]))
-        aTrackRotation0 = np.arctan2(rotLine.v[1], rotLine.v[0])
+        aTrackRotation0 = -1* np.arctan2(rotLine.v[1], rotLine.v[0])
 
         # convert the in points to line segments
         self.in_lines = []
