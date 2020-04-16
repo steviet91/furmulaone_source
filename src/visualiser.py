@@ -22,17 +22,9 @@ class Vis(object):
         self.img_y_buffer = 100
         self.img_scale = 0.1
         self.orig_img = np.zeros((self.img_w, self.img_h, 3), np.uint8)
-        self.colours = {
-            'base': (0, 255, 179),
-            'lidar': (29, 142, 249),
-            'hud': {
-                'outline': (150, 150, 150),
-                'throttle': (20,200,20),
-                'brake' : (20,20,200),
-                # 'steering_bg': (100,100,100),
-                'steer':(50,200,200),
-            }
-        }
+
+        # Load settings in the config.json
+        self.load_config()
 
         # camera
         self.kCameraSpring = 1.0
@@ -48,6 +40,16 @@ class Vis(object):
         # set the camera position equal to the vehicle (scaled properly)
         self.cameraPos = self.vehicle.posVehicle / self.img_scale
         self.reset_camera()
+
+    def load_config(self):
+        # find the scripts path
+        import os
+        self.module_path = os.path.dirname(os.path.abspath(__file__))
+        # read in the config
+        import json
+        with open(self.module_path + '/../setup/vis_config.json','r') as f:
+            self.config = json.load(f)
+            self.colours = self.config['colours']
 
     def reset_camera(self):
         """
@@ -159,17 +161,7 @@ class Vis(object):
         # Get actual vehicle data (i.e. the values being applied to the vehicle model, not the driver demands)
         actual_inputs = self.vehicle.get_vehicle_sensors()
         # Position of the HUD
-        x_start = self.img_x_buffer / 10
-        y_start = 50
-        hud_dims = {
-            'x': 20, 
-            'y': 20,
-            'width': 400,
-            'height': 200,
-            'padding': 10,
-            'bar_width': 50,
-            'steering_centreline_overshoot': 3,     # How far above/below the steering box to draw the line that marks centered steering
-        }
+        hud_dims = self.config['hud_dims']
         bar_height = hud_dims['height'] - 2*hud_dims['padding']
         hud_border = cv.rectangle(self.show_img, (hud_dims['x'], hud_dims['y']), (hud_dims['x'] + hud_dims['width'], hud_dims['y']+ hud_dims['height']), self.colours['hud']['outline'], thickness=1)
         # Throttle

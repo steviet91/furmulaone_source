@@ -1,0 +1,21 @@
+{
+    "colours" : {
+        "base": [0, 255, 179],
+        "lidar": [29, 142, 249],
+        "hud": {
+            "outline": [150, 150, 150],
+            "throttle": [20,200,20],
+            "brake" : [20,20,200],
+            "steer":[50,200,200]
+        }
+    },
+    "hud_dims": {
+        "x": 20, 
+        "y": 20,
+        "width": 400,
+        "height": 200,
+        "padding": 10,
+        "bar_width": 50,
+        "steering_centreline_overshoot": 3
+    }
+}
