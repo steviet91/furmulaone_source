@@ -6,6 +6,16 @@
         "y_buffer" : 100,
         "scale" : 0.1
     },
+    "camera": {
+        "kCameraSpring" : 1.0,
+        "cCameraDamper" : 8.0,
+        "mCamera" : 2.0,
+        "mVehicle" : 1.0,
+        "mu_camera" : 1.0,
+        "xCameraVehicle" : 0.0,
+        "xdotCameraVehicle" : 0.0,
+        "cameraPosOrigin" : [500, 500]
+    },
     "colours" : {
         "base": [0, 255, 179],
         "lidar": [29, 142, 249],

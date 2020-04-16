@@ -28,15 +28,15 @@ class Vis(object):
         self.colours = self.config['colours']
 
         # camera
-        self.kCameraSpring = 1.0
-        self.cCameraDamper = 8.0
-        self.mCamera = 2.0
-        self.mVehicle = 1.0
-        self.mu_camera = 1.0
-        self.xCameraVehicle = 0.0
-        self.xdotCameraVehicle = 0.0
+        self.kCameraSpring = self.config['camera']['kCameraSpring']
+        self.cCameraDamper = self.config['camera']['cCameraDamper']
+        self.mCamera = self.config['camera']['mCamera']
+        self.mVehicle = self.config['camera']['mVehicle']
+        self.mu_camera = self.config['camera']['mu_camera']
+        self.xCameraVehicle = self.config['camera']['xCameraVehicle']
+        self.xdotCameraVehicle = self.config['camera']['xdotCameraVehicle']
+        self.cameraPosOrigin = np.array(self.config['camera']['cameraPosOrigin'])
         self.tLastCamUpdate = None
-        self.cameraPosOrigin = np.array([500.0, 500.0])
         self.carPos = np.array([0, 0]) + self.cameraPosOrigin
         # set the camera position equal to the vehicle (scaled properly)
         self.cameraPos = self.vehicle.posVehicle / self.img_scale
