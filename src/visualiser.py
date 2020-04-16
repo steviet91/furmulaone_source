@@ -15,16 +15,17 @@ class Vis(object):
         self.track = track
         self.vehicle = vehicle
 
-        # get the screen resolution and set as image size
-        self.img_w = 1000
-        self.img_h = 1000
-        self.img_x_buffer = 100
-        self.img_y_buffer = 100
-        self.img_scale = 0.1
-        self.orig_img = np.zeros((self.img_w, self.img_h, 3), np.uint8)
-
         # Load settings in the config.json
         self.load_config()
+        # get the screen resolution and set as image size
+        self.img_w = self.config['img']['w']
+        self.img_h = self.config['img']['h']
+        self.img_x_buffer = self.config['img']['x_buffer']
+        self.img_y_buffer = self.config['img']['y_buffer']
+        self.img_scale = self.config['img']['scale']
+        self.orig_img = np.zeros((self.img_w, self.img_h, 3), np.uint8)
+        # image colours
+        self.colours = self.config['colours']
 
         # camera
         self.kCameraSpring = 1.0
@@ -49,7 +50,6 @@ class Vis(object):
         import json
         with open(self.module_path + '/../setup/vis_config.json','r') as f:
             self.config = json.load(f)
-            self.colours = self.config['colours']
 
     def reset_camera(self):
         """
