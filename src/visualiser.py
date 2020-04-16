@@ -22,12 +22,14 @@ class Vis(object):
         self.img_h = self.config['img']['h']
         self.img_x_buffer = self.config['img']['x_buffer']
         self.img_y_buffer = self.config['img']['y_buffer']
-        self.img_scale = self.config['img']['scale']
+
         self.orig_img = np.zeros((self.img_w, self.img_h, 3), np.uint8)
         # image colours
         self.colours = self.config['colours']
 
         # camera
+        self.scale_LU = self.config['camera']['scale_LU']
+        self.scale_vCar_BRP = self.config['camera']['scale_vCar_BRP']
         self.kCameraSpring = self.config['camera']['kCameraSpring']
         self.cCameraDamper = self.config['camera']['cCameraDamper']
         self.mCamera = self.config['camera']['mCamera']
@@ -39,6 +41,8 @@ class Vis(object):
         self.tLastCamUpdate = None
         self.carPos = np.array([0, 0]) + self.cameraPosOrigin
         # set the camera position equal to the vehicle (scaled properly)
+        self.cameraPosRaw = self.vehicle.posVehicle
+        self.update_camera_scale()
         self.cameraPos = self.vehicle.posVehicle / self.img_scale
         self.reset_camera()
 
@@ -80,9 +84,15 @@ class Vis(object):
         cv.circle(self.show_img, (int(self.carPos[0]), int(self.carPos[1])), 2, self.colours['base'], -1)
         cv.circle(self.show_img, (int(self.carPos[0]), int(self.carPos[1])), int(self.vehicle.collisionCircle.r / self.img_scale), (255, 0, 0))
 
+    def update_camera_scale(self):
+        """
+            Update the camera scale (the 'zoom')
+        """
+        self.img_scale = np.interp(self.vehicle.vVehicle, self.scale_vCar_BRP, self.scale_LU)
+
     def update_camera_position(self):
         """
-            Check the proximity of the car to the screen edges, update the translation
+            Mass spring damper system to move the carmera in order to track the vehicles movement
         """
         # determine the elapsed time
         if self.tLastCamUpdate is None:
@@ -100,11 +110,8 @@ class Vis(object):
             self.reset_camera()
         else:
 
-            # determine current car position relative to (0, 0) in the image
-            carPos = self.vehicle.posVehicle / self.img_scale
-
             # calculate the spring length
-            xCameraVehicle = calc_euclid_distance_2d(tuple(carPos), tuple(self.cameraPos))
+            xCameraVehicle = calc_euclid_distance_2d(tuple(self.vehicle.posVehicle), tuple(self.cameraPosRaw))
 
             # calcuate the velocity delta between the car and camera
             if bElapsedTimeAvailable:
@@ -120,9 +127,8 @@ class Vis(object):
             # calculate the resultant force on the camera
             FCamera = max(self.kCameraSpring * xCameraVehicle + xdotCameraVehicle * self.cCameraDamper - self.mu_camera * self.mCamera * 9.81, 0.0)
 
-
             # calculate the angle between the camera and vehicle
-            aCamVeh = np.arctan2(carPos[1] - self.cameraPos[1], carPos[0] - self.cameraPos[0])
+            aCamVeh = np.arctan2(self.vehicle.posVehicle[1] - self.cameraPosRaw[1], self.vehicle.posVehicle[0] - self.cameraPosRaw[0])
             # calculate the component forces
             FxCamera = FCamera * np.cos(aCamVeh)
             FyCamera = FCamera * np.sin(aCamVeh)
@@ -135,8 +141,11 @@ class Vis(object):
                 self.vxCamera += gxCamera * tElapsed
                 self.vyCamera += gyCamera * tElapsed
                 self.vCamera = np.sqrt(self.vxCamera**2 + self.vyCamera**2)
-                self.cameraPos[0] += self.vxCamera * tElapsed
-                self.cameraPos[1] += self.vyCamera * tElapsed
+                self.cameraPosRaw[0] += self.vxCamera * tElapsed
+                self.cameraPosRaw[1] += self.vyCamera * tElapsed
+
+            self.update_camera_scale()
+            self.cameraPos = self.cameraPosRaw / self.img_scale
 
     def draw_data(self):
         """
