@@ -26,13 +26,14 @@
             "steer":[50,200,200]
         }
     },
-    "hud_dims": {
+    "hud": {
         "x": 20, 
         "y": 20,
         "width": 400,
         "height": 200,
         "padding": 10,
         "bar_width": 50,
-        "steering_centreline_overshoot": 3
+        "steering_centreline_overshoot": 3,
+        "font": "FONT_HERSHEY_SIMPLEX"
     }
 }

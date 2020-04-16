@@ -161,7 +161,7 @@ class Vis(object):
         # Get actual vehicle data (i.e. the values being applied to the vehicle model, not the driver demands)
         actual_inputs = self.vehicle.get_vehicle_sensors()
         # Position of the HUD
-        hud_dims = self.config['hud_dims']
+        hud_dims = self.config['hud']
         bar_height = hud_dims['height'] - 2*hud_dims['padding']
         hud_border = cv.rectangle(self.show_img, (hud_dims['x'], hud_dims['y']), (hud_dims['x'] + hud_dims['width'], hud_dims['y']+ hud_dims['height']), self.colours['hud']['outline'], thickness=1)
         # Throttle
@@ -192,6 +192,14 @@ class Vis(object):
         steer_bar_width = steer_x2 - steer_x1
         steer_x1_actual = steer_xMid + int(steer_bar_width/2 * actual_inputs['aSteeringWheel'] / self.vehicle.config['aSteeringWheelMax'])
         steer_actual = cv.rectangle(self.show_img, (steer_x1_actual,steer_y1), (steer_xMid,steer_y2),self.colours['hud']['steer'], thickness=-1)
+        # Add vCar in lieu of proper speedo
+        font = getattr(cv,hud_dims['font'])
+        vCar = np.sqrt(actual_inputs['vxVehicle']**2 + actual_inputs['vyVehicle']**2)
+        text = 'vCar:{0:>5.1f} m/s'.format(vCar)
+        text_size = cv.getTextSize(text, font, 1, 2)[0]
+        v_car_x = steer_xMid - int(text_size[0]/2)
+        v_car_y = throttle_y2
+        cv.putText(self.show_img, text, (v_car_x, v_car_y), font, 1, self.colours['hud']['outline'],)
 
     def draw_all_lidars(self):
         """
