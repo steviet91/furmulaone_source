@@ -7,8 +7,8 @@ from threading import Thread
 class GamePad(object):
 
     # The amount by which to vary the throttle/brake/steering demand on each key event (keyboard controls only)
-    _throttle_brake_delta = 0.05
-    _steering_delta = 45
+    _throttle_brake_delta = 1.0
+    _steering_delta = 360
     _lidar_rot_delta = 5
 
     def __init__(self):

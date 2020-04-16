@@ -22,8 +22,17 @@ class Vis(object):
         self.img_y_buffer = 100
         self.img_scale = 0.1
         self.orig_img = np.zeros((self.img_w, self.img_h, 3), np.uint8)
-        self.baseColour = (0, 255, 179)
-        self.lidarColour = (29, 142, 249)
+        self.colours = {
+            'base': (0, 255, 179),
+            'lidar': (29, 142, 249),
+            'hud': {
+                'outline': (150, 150, 150),
+                'throttle': (20,200,20),
+                'brake' : (20,20,200),
+                # 'steering_bg': (100,100,100),
+                'steer':(50,200,200),
+            }
+        }
 
         # camera
         self.kCameraSpring = 1.0
@@ -65,8 +74,8 @@ class Vis(object):
         rect = cv.minAreaRect(np.array((carFL, carFR, carRR, carRL), dtype=np.float32))
         box = cv.boxPoints(rect)
         box = np.int0(box)
-        cv.drawContours(self.show_img, [box], 0, self.baseColour, 2)
-        cv.circle(self.show_img, (int(self.carPos[0]), int(self.carPos[1])), 2, self.baseColour, -1)
+        cv.drawContours(self.show_img, [box], 0, self.colours['base'], 2)
+        cv.circle(self.show_img, (int(self.carPos[0]), int(self.carPos[1])), 2, self.colours['base'], -1)
         cv.circle(self.show_img, (int(self.carPos[0]), int(self.carPos[1])), int(self.vehicle.collisionCircle.r / self.img_scale), (255, 0, 0))
 
     def update_camera_position(self):
@@ -141,7 +150,56 @@ class Vis(object):
             pos = (int(x_start), int(y_start + y_offset * i))
             i += 1
             s = k + ':{:.5f}'.format(v)
-            cv.putText(self.show_img, s, pos, cv.FONT_HERSHEY_SIMPLEX, 0.75, self.baseColour, thickness)
+            cv.putText(self.show_img, s, pos, cv.FONT_HERSHEY_SIMPLEX, 0.75, self.colours['base'], thickness)
+
+    def draw_demands(self):
+        """
+            Draw a visualisation for the driver demands (throttle, brake, steer)
+        """
+        # Get actual vehicle data (i.e. the values being applied to the vehicle model, not the driver demands)
+        actual_inputs = self.vehicle.get_vehicle_sensors()
+        # Position of the HUD
+        x_start = self.img_x_buffer / 10
+        y_start = 50
+        hud_dims = {
+            'x': 20, 
+            'y': 20,
+            'width': 400,
+            'height': 200,
+            'padding': 10,
+            'bar_width': 50,
+            'steering_centreline_overshoot': 3,     # How far above/below the steering box to draw the line that marks centered steering
+        }
+        bar_height = hud_dims['height'] - 2*hud_dims['padding']
+        hud_border = cv.rectangle(self.show_img, (hud_dims['x'], hud_dims['y']), (hud_dims['x'] + hud_dims['width'], hud_dims['y']+ hud_dims['height']), self.colours['hud']['outline'], thickness=1)
+        # Throttle
+        throttle_x1 = hud_dims['x'] + hud_dims['padding']
+        throttle_y1 = hud_dims['y'] + hud_dims['padding']
+        throttle_x2 = throttle_x1 + hud_dims['bar_width']
+        throttle_y2 = hud_dims['y'] - hud_dims['padding'] + hud_dims['height']
+        throttle_border = cv.rectangle(self.show_img, (throttle_x1,throttle_y1), (throttle_x2,throttle_y2),self.colours['hud']['outline'], thickness=1)
+        # Note: y=0 is the top of the screen, so need to calculate 'height' of the bar as y2 - value
+        throttle_y1_actual = throttle_y2 - int(bar_height * actual_inputs['rThrottlePedal'])
+        throttle_actual = cv.rectangle(self.show_img, (throttle_x1,throttle_y1_actual), (throttle_x2,throttle_y2),self.colours['hud']['throttle'], thickness=-1)
+        # Brake
+        brake_x1 = throttle_x2 + hud_dims['padding']
+        brake_y1 = hud_dims['y'] + hud_dims['padding']
+        brake_x2 = brake_x1 + hud_dims['bar_width']
+        brake_y2 = throttle_y2
+        brake_border = cv.rectangle(self.show_img, (brake_x1,brake_y1), (brake_x2,brake_y2),self.colours['hud']['outline'], thickness=1)
+        brake_y1_actual = brake_y2 - int(bar_height * actual_inputs['rBrakePedal'])
+        brake_actual = cv.rectangle(self.show_img, (brake_x1,brake_y1_actual), (brake_x2,brake_y2),self.colours['hud']['brake'], thickness=-1)
+        # Steering
+        steer_x1 = brake_x2 + hud_dims['padding']
+        steer_y1 = int(hud_dims['y'] + (hud_dims['height'] / 2) - hud_dims['bar_width']/2)
+        steer_x2 = hud_dims['x'] + hud_dims['width'] - hud_dims['padding']
+        steer_y2 = steer_y1 + hud_dims['bar_width']
+        steer_xMid = int((steer_x1 + steer_x2)/2)
+        steer_border = cv.rectangle(self.show_img, (steer_x1,steer_y1), (steer_x2,steer_y2),self.colours['hud']['outline'], thickness=1)
+        steer_centreline = cv.line(self.show_img, (steer_xMid, steer_y1-hud_dims['steering_centreline_overshoot']),(steer_xMid, steer_y2+hud_dims['steering_centreline_overshoot']) , self.colours['hud']['outline'], thickness=1)
+        steer_bar_width = steer_x2 - steer_x1
+        steer_x1_actual = steer_xMid + int(steer_bar_width/2 * actual_inputs['aSteeringWheel'] / self.vehicle.config['aSteeringWheelMax'])
+        steer_actual = cv.rectangle(self.show_img, (steer_x1_actual,steer_y1), (steer_xMid,steer_y2),self.colours['hud']['steer'], thickness=-1)
 
     def draw_all_lidars(self):
         """
@@ -161,7 +219,7 @@ class Vis(object):
                 # the lidar ray scored a hit
                 p1 = r.p1 / self.img_scale + self.cameraPosOrigin - self.cameraPos
                 p2 = (r.p1 + r.v_hat * lidar.collision_array[i]) / self.img_scale + self.cameraPosOrigin - self.cameraPos
-                cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.lidarColour)
+                cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.colours['lidar'])
                 #pos = (r.p1 + r.v_hat * lidar.collision_array[i] / 2 ) / self.img_scale + self.cameraPosOrigin
                 #cv.putText(self.show_img, '{:.2f} m'.format(lidar.collision_array[i]), tuple(pos.astype(np.int32)), cv.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), thickness)
         p0 = np.array([lidar.collisionCircle.x0, lidar.collisionCircle.y0]) / self.img_scale + self.cameraPosOrigin - self.cameraPos
@@ -178,7 +236,7 @@ class Vis(object):
             # map the line coordinates to the image
             p1 = (l.p1 / self.img_scale) + self.cameraPosOrigin - self.cameraPos
             p2 = (l.p2 / self.img_scale) + self.cameraPosOrigin - self.cameraPos
-            cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.baseColour)
+            cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.colours['base'])
             for ii in range(1,20):
                 pos = (l.p1 + l.v * ii / 20) / self.img_scale + self.cameraPosOrigin - self.cameraPos
                 cv.putText(self.show_img, str(i + 1), tuple(pos.astype(np.int32)), cv.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), thickness)
@@ -187,7 +245,7 @@ class Vis(object):
             # map the line coordinates to the image
             p1 = (l.p1 / self.img_scale) + self.cameraPosOrigin - self.cameraPos
             p2 = (l.p2 / self.img_scale) + self.cameraPosOrigin - self.cameraPos
-            cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.baseColour)
+            cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.colours['base'])
             for ii in range(1,20):
                 pos = (l.p1 + l.v * ii / 20) / self.img_scale + self.cameraPosOrigin - self.cameraPos
                 cv.putText(self.show_img, str(i + 1), tuple(pos.astype(np.int32)), cv.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), thickness)
