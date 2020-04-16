@@ -23,7 +23,7 @@ class Vis(object):
         self.img_x_buffer = self.config['img']['x_buffer']
         self.img_y_buffer = self.config['img']['y_buffer']
         self.img_scale = self.config['img']['scale']
-        self.orig_img = np.zeros((self.img_w, self.img_h, 3), np.uint8)
+        self.orig_img = np.zeros((self.img_h, self.img_w, 3), np.uint8)
         # image colours
         self.colours = self.config['colours']
 
@@ -163,28 +163,30 @@ class Vis(object):
         # Position of the HUD
         hud_dims = self.config['hud']
         bar_height = hud_dims['height'] - 2*hud_dims['padding']
-        hud_border = cv.rectangle(self.show_img, (hud_dims['x'], hud_dims['y']), (hud_dims['x'] + hud_dims['width'], hud_dims['y']+ hud_dims['height']), self.colours['hud']['outline'], thickness=1)
+        # hud_border = cv.rectangle(self.show_img, (hud_dims['x'], hud_dims['y']), (hud_dims['x'] + hud_dims['width'], hud_dims['y']+ hud_dims['height']), self.colours['hud']['outline'], thickness=1)
+        hud_border = cv.rectangle(self.show_img, (0, self.img_h-1), (self.img_w-1, self.img_h - hud_dims['height']), self.colours['hud']['outline'], thickness=1)
+        hud_bg = cv.rectangle(self.show_img, (1, self.img_h-2), (self.img_w-2, self.img_h - hud_dims['height'] + 1), self.colours['hud']['bg'], thickness=-1)
         # Throttle
         throttle_x1 = hud_dims['x'] + hud_dims['padding']
-        throttle_y1 = hud_dims['y'] + hud_dims['padding']
+        throttle_y1 = self.img_h-1 - hud_dims['padding']
         throttle_x2 = throttle_x1 + hud_dims['bar_width']
-        throttle_y2 = hud_dims['y'] - hud_dims['padding'] + hud_dims['height']
+        throttle_y2 = throttle_y1 - (hud_dims['height'] - 2*hud_dims['padding'])
         throttle_border = cv.rectangle(self.show_img, (throttle_x1,throttle_y1), (throttle_x2,throttle_y2),self.colours['hud']['outline'], thickness=1)
         # Note: y=0 is the top of the screen, so need to calculate 'height' of the bar as y2 - value
-        throttle_y1_actual = throttle_y2 - int(bar_height * actual_inputs['rThrottlePedal'])
-        throttle_actual = cv.rectangle(self.show_img, (throttle_x1,throttle_y1_actual), (throttle_x2,throttle_y2),self.colours['hud']['throttle'], thickness=-1)
+        throttle_y2_actual = throttle_y1 - int(bar_height * actual_inputs['rThrottlePedal'])
+        throttle_actual = cv.rectangle(self.show_img, (throttle_x1,throttle_y1), (throttle_x2,throttle_y2_actual),self.colours['hud']['throttle'], thickness=-1)
         # Brake
         brake_x1 = throttle_x2 + hud_dims['padding']
-        brake_y1 = hud_dims['y'] + hud_dims['padding']
+        brake_y1 = throttle_y1
         brake_x2 = brake_x1 + hud_dims['bar_width']
         brake_y2 = throttle_y2
         brake_border = cv.rectangle(self.show_img, (brake_x1,brake_y1), (brake_x2,brake_y2),self.colours['hud']['outline'], thickness=1)
-        brake_y1_actual = brake_y2 - int(bar_height * actual_inputs['rBrakePedal'])
-        brake_actual = cv.rectangle(self.show_img, (brake_x1,brake_y1_actual), (brake_x2,brake_y2),self.colours['hud']['brake'], thickness=-1)
+        brake_y2_actual = brake_y1 - int(bar_height * actual_inputs['rBrakePedal'])
+        brake_actual = cv.rectangle(self.show_img, (brake_x1,brake_y1), (brake_x2,brake_y2_actual),self.colours['hud']['brake'], thickness=-1)
         # Steering
         steer_x1 = brake_x2 + hud_dims['padding']
-        steer_y1 = int(hud_dims['y'] + (hud_dims['height'] / 2) - hud_dims['bar_width']/2)
-        steer_x2 = hud_dims['x'] + hud_dims['width'] - hud_dims['padding']
+        steer_y1 = int(self.img_h - (hud_dims['height'] / 2) - hud_dims['bar_width']/2)
+        steer_x2 = steer_x1 + hud_dims['steering_bar_width']
         steer_y2 = steer_y1 + hud_dims['bar_width']
         steer_xMid = int((steer_x1 + steer_x2)/2)
         steer_border = cv.rectangle(self.show_img, (steer_x1,steer_y1), (steer_x2,steer_y2),self.colours['hud']['outline'], thickness=1)
@@ -196,10 +198,10 @@ class Vis(object):
         font = getattr(cv,hud_dims['font'])
         vCar = np.sqrt(actual_inputs['vxVehicle']**2 + actual_inputs['vyVehicle']**2)
         text = 'vCar:{0:>5.1f} m/s'.format(vCar)
-        text_size = cv.getTextSize(text, font, 1, 2)[0]
+        text_size = cv.getTextSize(text, font, hud_dims['font_scale'], 2)[0]
         v_car_x = steer_xMid - int(text_size[0]/2)
-        v_car_y = throttle_y2
-        cv.putText(self.show_img, text, (v_car_x, v_car_y), font, 1, self.colours['hud']['outline'],)
+        v_car_y = throttle_y1
+        cv.putText(self.show_img, text, (v_car_x, v_car_y), font, hud_dims['font_scale'], self.colours['hud']['outline'],)
 
     def draw_all_lidars(self):
         """

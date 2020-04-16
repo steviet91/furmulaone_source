@@ -1,7 +1,7 @@
 {
     "img" : {
-        "w" : 1000,
-        "h" : 1000,
+        "w" : 1600,
+        "h" : 800,
         "x_buffer" : 100,
         "y_buffer" : 100,
         "scale" : 0.1
@@ -21,6 +21,7 @@
         "lidar": [29, 142, 249],
         "hud": {
             "outline": [150, 150, 150],
+            "bg": [20, 20, 20],
             "throttle": [20,200,20],
             "brake" : [20,20,200],
             "steer":[50,200,200]
@@ -30,10 +31,12 @@
         "x": 20, 
         "y": 20,
         "width": 400,
-        "height": 200,
+        "height": 150,
         "padding": 10,
-        "bar_width": 50,
+        "bar_width": 40,
+        "steering_bar_width": 200,
         "steering_centreline_overshoot": 3,
-        "font": "FONT_HERSHEY_SIMPLEX"
+        "font": "FONT_HERSHEY_SIMPLEX",
+        "font_scale": 0.7
     }
 }
