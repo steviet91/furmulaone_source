@@ -3,12 +3,13 @@
         "w" : 1000,
         "h" : 1000,
         "x_buffer" : 100,
-        "y_buffer" : 100,
-        "scale" : 0.1
+        "y_buffer" : 100
     },
     "camera": {
-        "kCameraSpring" : 1.0,
-        "cCameraDamper" : 8.0,
+        "scale_LU" : [0.1, 0.15, 0.35],
+        "scale_vCar_BRP": [0, 50, 100],
+        "kCameraSpring" : 0.01,
+        "cCameraDamper" : 0.08,
         "mCamera" : 2.0,
         "mVehicle" : 1.0,
         "mu_camera" : 1.0,
@@ -27,7 +28,7 @@
         }
     },
     "hud_dims": {
-        "x": 20, 
+        "x": 20,
         "y": 20,
         "width": 400,
         "height": 200,
