@@ -6,6 +6,7 @@ from src.geom import calc_euclid_distance_2d_sq
 
 # import a track from a google terrain image using open cv. Need to spit out the track csv files
 
+
 # need tons of globals for the mouse callback functions in cv
 refPt = []
 final_cnts = []
@@ -18,7 +19,8 @@ final_points = []
 last_idx_selected = None
 len_points_added = None
 start_idx = None
-
+pix_selected = None
+calc_gray = False
 
 # ######################
 # CV 2 MOUSE CALLBACKS #
@@ -107,6 +109,17 @@ def select_start_line(event, x, y, flags, param):
     # highlight the closest point
     hover_points = final_points[idx,:]
 
+def select_target_pixel(event, x, y, flags, param):
+    """
+        Select a pixel to increase or reduce its intensity
+    """
+    global pix_selected, calc_gray
+
+    if event == cv.EVENT_LBUTTONDOWN:
+        pix_selected = (x,y)
+        calc_gray = True
+        print('User has selected pixel:', pix_selected)
+
 # ###################
 # UTILITY FUNCTIONS #
 # ###################
@@ -130,7 +143,27 @@ def produce_edge_image(thresh, img):
     blur_img = cv.medianBlur(alpha_img, 9)
     blur_img = cv.morphologyEx(blur_img, cv.MORPH_OPEN, (5,5))
     # find the edged
-    return cv.Canny(blur_img, 30, 200)
+    return cv.Canny(blur_img, 30, 200), alpha_img
+
+def set_text_help(img, text, is_gray=False, pos=0):
+    """
+        Set the set onto the image with a background
+    """
+    text_x = 20
+    text_y = 30 + 30 * pos
+    font = cv.FONT_HERSHEY_SIMPLEX
+    font_size = 0.5
+    if is_gray:
+        font_colour = (255, 255, 255)
+    else:
+        font_colour = (0, 255, 179)
+    background = (0, 0, 0)
+    font_thickness = 1
+    (text_w, text_h),_ = cv.getTextSize(text, font, fontScale=font_size, thickness=font_thickness)
+    box_coords = ((text_x, text_y+5), (text_x + text_w + 10 , text_y - text_h - 5))
+    cv.rectangle(img, box_coords[0], box_coords[1], background, cv.FILLED)
+    cv.putText(img, text, (text_x, text_y), font, fontScale=font_size, color=font_colour, thickness=font_thickness)
+
 
 # ######
 # MAIN #
@@ -139,7 +172,7 @@ def main():
     global refPt, temp_cnts, final_cnts, hover_cnts, cent_cnts
     # set the requirements of the arguement parser
     ap = argparse.ArgumentParser()
-    ap.add_argument('-i', '--image', required = True, help = "Name of image (inc ext) within data/track/images")
+    ap.add_argument('-i', '--image', required = True, help = "Name of .png image file (excluding ext) within data/track/images")
     ap.add_argument('-s', '--scale', required = False, help = 'Scale of the image in m/pix')
     ap.add_argument('-ss', '--splinesmoothing', required = False, help = 'Spline smoothing value for splprep')
     ap.add_argument('-t', '--track', required = True, help = 'Name of the track')
@@ -162,8 +195,10 @@ def main():
         cv.namedWindow('scale_image')
         cv.setMouseCallback('scale_image', select_scale_points)
         # get the user to select points
+        img_copy = image.copy()
+        set_text_help(img_copy, 'Define the image scale by selecting two points of known distance, press "Y" when chosen, "R" to reset points')
         while True:
-            cv.imshow('scale_image', image)
+            cv.imshow('scale_image', img_copy)
             key = cv.waitKey(1) & 0xFF
 
             # reset the points
@@ -194,10 +229,27 @@ def main():
     gray_img = cv.cvtColor(image, cv.COLOR_BGR2GRAY) # scale it up
 
     # convert to alpha image
+
     if args['threshold'] is None:
+        # create a new master image for thresholding - we may want to change base properties to re grayscale
         img_copy = image.copy()
+        hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV) # grab the hsv version of the image
+        masked_img = None
         calc_thresh = True
+        NImage = 0
         thresh = 90
+        h_tol_up = 1 # set a tolerance for hue
+        s_tol_up = 1 # set a tolerance for saturation
+        v_tol_up = 1 # set a tolerance for value
+        h_tol_down = -1 # set a tolerance for hue
+        s_tol_down = -1 # set a tolerance for saturation
+        v_tol_down = -1 # set a tolerance for value
+        cv.namedWindow('Thresh')
+        cv.setMouseCallback('Thresh', select_target_pixel)
+        help_text = '..."W" to increase, "S" to descrease, "Y" to continue, "T" to switch between alpha image, click a pixel to modify its intensity, "D" to increase, "A" to reduce'
+        help_mask1 = '(d/f to change h_tol_up, g/h to change s_tol_up, j/k to change v_tol_up)'
+        help_mask2 = '(x/c to change h_tol_down, v/b to change s_tol_down, n/m to change v_tol_down)'
+        global pix_selected, calc_gray
         while True:
             cv.imshow('Thresh', img_copy)
             key = cv.waitKey(1) & 0xFF
@@ -212,16 +264,112 @@ def main():
                 thresh = max(2, thresh)
                 calc_thresh = True
 
+            # HVS Upper tolerances
+            if pix_selected is not None:
+                if key == ord('f'):
+                    h_tol_up += 1
+                    calc_gray = True
+
+                if key == ord('d'):
+                    h_tol_up -= 1
+                    h_tol_up = max(1, h_tol_up)
+                    calc_gray = True
+
+                if key == ord('h'):
+                    s_tol_up += 1
+                    calc_gray = True
+
+                if key == ord('g'):
+                    s_tol_up -= 1
+                    s_tol_up = max(1, s_tol_up)
+                    calc_gray = True
+
+                if key == ord('k'):
+                    v_tol_up += 1
+                    calc_gray = True
+
+                if key == ord('j'):
+                    v_tol_up -= 1
+                    v_tol_up = max(1, v_tol_up)
+                    calc_gray = True
+
+                # HSV Lower tolerances
+                if key == ord('x'):
+                    h_tol_down -= 1
+                    calc_gray = True
+
+                if key == ord('c'):
+                    h_tol_down += 1
+                    h_tol_down = min(-1, h_tol_down)
+                    calc_gray = True
+
+                if key == ord('v'):
+                    s_tol_down -= 1
+                    calc_gray = True
+
+                if key == ord('b'):
+                    s_tol_down += 1
+                    s_tol_down = min(-1, s_tol_down)
+                    calc_gray = True
+
+                if key == ord('n'):
+                    v_tol_down -= 1
+                    calc_gray = True
+
+                if key == ord('m'):
+                    v_tol_down += 1
+                    v_tol_down = min(-1, v_tol_down)
+                    calc_gray = True
+
+            # Change image
+            if key == ord('t'):
+                if NImage == 2:
+                    NImage = 0
+                else:
+                    NImage += 1
+                if NImage == 2 and  masked_img is None:
+                    NImage = 0
+                calc_thresh = True
+
             if key == ord('y'):
                 break
 
+            if calc_gray:
+                pix_channel = hsv[pix_selected[1], pix_selected[0]]
+                low_b = pix_channel + np.array([h_tol_down, s_tol_down, v_tol_down])
+                up_b = pix_channel + np.array([h_tol_up, s_tol_up, v_tol_up])
+                mask = cv.inRange(hsv, low_b, up_b) # take a mask of the image
+                masked_img = cv.bitwise_and(image, image, mask=mask)
+                gray_img = cv.cvtColor(masked_img, cv.COLOR_BGR2GRAY) # scale it up
+                calc_gray = False
+                calc_thresh = True
+
             if calc_thresh:
-                img_copy = image.copy()
-                edged = produce_edge_image(thresh, gray_img.copy())
+                edged,alpha_img = produce_edge_image(thresh, gray_img.copy())
                 contours, hierarchy = cv.findContours(edged, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
+                if NImage == 0:
+                    img_copy = image.copy()
+                elif NImage == 1:
+                    img_copy = alpha_img.copy()
+                elif NImage == 2:
+                    img_copy = masked_img.copy()
                 cv.drawContours(img_copy, contours, -1, (0, 0, 255), 1)
-                cv.putText(img_copy, 'Threshold @ '+str(thresh), (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 179), 2)
-                cv.putText(img_copy, 'W to increase, S to descrease, Y to continue', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 179), 1)
+                if NImage == 0:
+                    set_text_help(img_copy, ' RAW - Threshold @ '+str(thresh)+ help_text)
+                elif NImage == 1:
+                    set_text_help(img_copy, 'ALPHA - Threshold @ '+str(thresh)+ help_text, is_gray=True)
+                elif NImage == 2:
+                    set_text_help(img_copy, 'MASK - Threshold @ '+str(thresh)+ help_text)
+                if masked_img is not None:
+                    mask_text = 'HSV Tolerances for Mask- H('+str(h_tol_down)+'/+'+str(h_tol_up) +') S('+str(s_tol_down)+'/+'+str(s_tol_up) +') V('+str(v_tol_down)+'/+'+str(v_tol_up) +')  '
+                    if NImage == 1:
+                        set_text_help(img_copy, mask_text, pos=1, is_gray=True)
+                        set_text_help(img_copy, help_mask1, pos=2, is_gray=True)
+                        set_text_help(img_copy, help_mask2,pos=3, is_gray=True)
+                    else:
+                        set_text_help(img_copy, mask_text, pos=1)
+                        set_text_help(img_copy, help_mask1, pos=2)
+                        set_text_help(img_copy, help_mask2,pos=3)
                 calc_thresh = False
 
     else:
@@ -240,6 +388,7 @@ def main():
     cv.namedWindow('Contours')
     cv.setMouseCallback('Contours', select_contour)
     print("Select the contours to keep, when ready press 'y', 'z' will undo the last change")
+    help_text = 'Left-Click to select, Y to continue, Z to undo (uses contour centroid to locate closest)'
     for i in range(0,2):
         img_copy = image.copy()
         if i == 0:
@@ -271,10 +420,9 @@ def main():
             if len(final_cnts) > 0:
                 cv.drawContours(img_copy, final_cnts, -1, (0 ,255, 0), 1)
             if i == 0:
-                cv.putText(img_copy, 'Select contours to use for INNER track', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 179), 2)
+                set_text_help(img_copy, 'Select contours to use for INNER track' + help_text)
             else:
-                cv.putText(img_copy, 'Select contours to use for OUTER track', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 179), 2)
-            cv.putText(img_copy, 'Left-Click to select, Y to continue, Z to undo (uses contour centroid to locate closest)', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 179), 1)
+                set_text_help(img_copy, 'Select contours to use for OUTER track' + help_text)
     cv.destroyWindow('Contours')
 
     # get the user to select the points
@@ -295,7 +443,9 @@ def main():
         # allow the user to select the points
         cv.namedWindow('Points')
         cv.setMouseCallback('Points', select_cnt_points)
+        help_text = 'Left-Click to select, hold shift to multi-select, Y to continue, Z to undo'
         img_copy = image.copy()
+        last_idx_selected = None
         while True:
             key = cv.waitKey(1) & 0xFF
             cv.imshow('Points', img_copy)
@@ -334,10 +484,9 @@ def main():
                     for p in final_points:
                         cv.circle(img_copy, tuple(p), 2, (0, 255, 0),-1)
             if i == 0:
-                cv.putText(img_copy, 'Select points to use for INNER track', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 179), 2)
+                set_text_help(img_copy, 'Select points to use for INNER track' + help_text)
             else:
-                cv.putText(img_copy, 'Select points to use for OUTER track', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 179), 2)
-            cv.putText(img_copy, 'Left-Click to select, hold shift to multi-select, Y to continue, Z to undo', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 179), 1)
+                set_text_help(img_copy, 'Select points to use for OUTER track' + help_text)
             #print('H',len(hover_points),'F',final_points)
     cv.destroyWindow('Points')
 
@@ -362,6 +511,7 @@ def main():
                     points_proc = np.vstack((points_proc, p))
         x = points_proc[:,0]
         y = points_proc[:,1]
+        help_text = 'W to incr smoothing, S to dcr smoothing,  D to incr points, A to drc points, Y to continue'
         if args['splinesmoothing'] is None:
             s = 100
             N = 2000
@@ -380,8 +530,7 @@ def main():
                 cv.drawContours(img_copy, plot_points, -1, (0 ,255, 0), 1)
                 for p in smoothed_points.astype(np.int32):
                     cv.circle(img_copy, tuple(p), 2, (0, 255, 0),-1)
-                cv.putText(img_copy, 'BSpline Smoothing @ '+str(s) + ' with ' + str(N) + ' points', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 179), 2)
-                cv.putText(img_copy, 'W to incr smoothing, S to dcr smoothing,  D to incr points, A to drc points, Y to continue', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 179), 1)
+                set_text_help(img_copy, 'BSpline Smoothing @ '+str(s) + ' with ' + str(N) + ' points...' + help_text)
                 cv.imshow('Smoothed',img_copy)
                 key = cv.waitKey(100) & 0xFF
 
@@ -434,6 +583,7 @@ def main():
         in_cnt = np.array([list(zip(plot_points[0], plot_points[1]))])
         plot_points = out_points_final.astype(np.int32).T
         out_cnt = np.array([list(zip(plot_points[0], plot_points[1]))])
+        help_text = 'Left-Click to select, Y to continue'
         while True:
             key = cv.waitKey(1) & 0xFF
             cv.imshow('StartLine', img_copy)
@@ -441,9 +591,7 @@ def main():
             if key == ord('y') and start_idx is not None:
                 if i == 0:
                     if start_idx > 0:
-                        print(in_points_final)
                         in_points_final = np.vstack((in_points_final[start_idx:,:], in_points_final[:start_idx,:]))
-                        print(in_points_final)
                         in_start = (int(in_points_final[0,0]), int(in_points_final[0,1]))
                     print('Inner start line set')
                 else:
@@ -473,10 +621,10 @@ def main():
             if len(hover_points) > 0:
                 cv.circle(img_copy, tuple(hover_points.astype(np.int32)), 2, (255, 0, 0),-1)
             if i == 0:
+                set_text_help(img_copy, 'Set INNER start line, ' + help_text)
                 cv.putText(img_copy, 'set INNER start line', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 179), 2)
             else:
-                cv.putText(img_copy, 'Set OUTER start line', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 179), 2)
-            cv.putText(img_copy, 'Left-Click to select, Y to continue', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 179), 1)
+                set_text_help(img_copy, 'Set OUTER start line, ' + help_text)
 
     cv.destroyWindow('StartLine')
 
