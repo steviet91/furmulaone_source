@@ -59,6 +59,7 @@ def main():
         vis.draw_car()
         vis.draw_track()
         vis.draw_all_lidars()
+        vis.draw_demands()
         vis.render_image()
         vis.update_camera_position()
 
