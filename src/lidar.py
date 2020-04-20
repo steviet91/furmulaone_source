@@ -48,7 +48,7 @@ class Lidar(object):
         """
         self.rays = []
         for i in range(0,self.NRays):
-            a = self.a0 - self.aFov / 2 + i * self.aFov / self.NRays  # angle of this ray
+            a = self.a0 - self.aFov / 2 + i * self.aFov / (self.NRays - 1)  # angle of this ray
             # going to work as a unit vector
             x = np.cos(a)
             y = np.sin(a)
