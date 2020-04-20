@@ -415,6 +415,9 @@ def main():
 
             img_copy = image.copy()
             cv.drawContours(img_copy, temp_cnts, -1, (0, 0, 255), 1)
+            for c in cent_cnts:
+                cv.circle(img_copy, (int(c[0]), int(c[1])), 1, (0, 255, 179), -1)
+                cv.putText(img_copy, 'c',(int(c[0]), int(c[1])), cv.FONT_HERSHEY_SIMPLEX, fontScale=0.5, color=(0, 255, 179), thickness=1)
             if len(hover_cnts) > 0:
                 cv.drawContours(img_copy, hover_cnts, -1, (255, 0, 0), 2)
             if len(final_cnts) > 0:
@@ -527,6 +530,7 @@ def main():
                     cv.drawContours(img_copy, in_track_cnts, -1, (0 ,0, 255), 1)
                 else:
                     cv.drawContours(img_copy, out_track_cnts, -1, (0 ,0, 255), 1)
+                    cv.drawContours(img_copy, in_points_plot, -1, (0, 255, 0), 1)
                 cv.drawContours(img_copy, plot_points, -1, (0 ,255, 0), 1)
                 for p in smoothed_points.astype(np.int32):
                     cv.circle(img_copy, tuple(p), 2, (0, 255, 0),-1)
@@ -538,6 +542,8 @@ def main():
                     if i == 0:
                         print('Inner Smoothing Completed')
                         in_points_final = smoothed_points
+                        in_points_plot = smoothed_points.astype(np.int32).T
+                        in_points_plot = np.array([list(zip(in_points_plot[0], in_points_plot[1]))])
                     else:
                         print('Outer Smoothing Completed')
                         out_points_final = smoothed_points
