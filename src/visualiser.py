@@ -247,18 +247,22 @@ class Vis(object):
             p1 = (l.p1 / self.img_scale) + self.cameraPosOrigin - self.cameraPos
             p2 = (l.p2 / self.img_scale) + self.cameraPosOrigin - self.cameraPos
             cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.colours['base'])
+            """
             for ii in range(1,20):
                 pos = (l.p1 + l.v * ii / 20) / self.img_scale + self.cameraPosOrigin - self.cameraPos
                 cv.putText(self.show_img, str(i + 1), tuple(pos.astype(np.int32)), cv.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), thickness)
+            """
         # render the out lines
         for i,l in enumerate(self.track.data.out_lines):
             # map the line coordinates to the image
             p1 = (l.p1 / self.img_scale) + self.cameraPosOrigin - self.cameraPos
             p2 = (l.p2 / self.img_scale) + self.cameraPosOrigin - self.cameraPos
             cv.line(self.show_img, tuple(p1.astype(np.int32)), tuple(p2.astype(np.int32)), self.colours['base'])
+            """
             for ii in range(1,20):
                 pos = (l.p1 + l.v * ii / 20) / self.img_scale + self.cameraPosOrigin - self.cameraPos
                 cv.putText(self.show_img, str(i + 1), tuple(pos.astype(np.int32)), cv.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), thickness)
+            """
 
     def render_image(self):
         cv.imshow('Vis', self.show_img)
