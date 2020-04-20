@@ -6,7 +6,7 @@
   "aSteeringWheelMin": -360.0,
   "drThrottlePedalMax": 6.667,
   "drBrakePedalMax": 10.0,
-  "nSteeringWheelMax": 290,
+  "nSteeringWheelMax": 1000,
   "rRollRadF": 0.32,
   "rRollRadR": 0.34,
   "xWheelBase": 2.67,
