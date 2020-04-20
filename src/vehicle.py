@@ -17,9 +17,9 @@ class Vehicle(object):
         # save the arguments
         self.id = id
         self.track = track
-        self.aLidarFOVFront = aLidarFOVFront
-        self.aLidarFOVL = aLidarFOVL
-        self.aLidarFOVR = aLidarFOVR
+        self.aLidarFOVFront = aLidarFOVFront * np.pi / 180
+        self.aLidarFOVL = aLidarFOVL * np.pi / 180
+        self.aLidarFOVR = aLidarFOVR * np.pi / 180
 
         # Get the module path
         self.module_path = os.path.dirname(os.path.abspath(__file__))
@@ -61,15 +61,10 @@ class Vehicle(object):
             Set up the LIDAR objects
         """
 
-        # convert angles to rad
-        aFOVFront = self.aLidarFOVFront * np.pi / 180
-        aFOVL = self.aLidarFOVL * np.pi / 180
-        aFOVR = self.aLidarFOVR * np.pi / 180
-
         # calculate the maximum rotation angle based on FOV
-        self.aRotLimFront = self.config['aLidarRotMax'] * np.pi / 180 - aFOVFront / 2
-        self.aRotLimL = self.config['aLidarRotMax'] * np.pi / 180 - aFOVL / 2
-        self.aRotLimR = self.config['aLidarRotMax'] * np.pi / 180 - aFOVR / 2
+        self.aRotLimFront = self.config['aLidarRotMax'] * np.pi / 180 - self.aLidarFOVFront / 2
+        self.aRotLimL = self.config['aLidarRotMax'] * np.pi / 180 - self.aLidarFOVL / 2
+        self.aRotLimR = self.config['aLidarRotMax'] * np.pi / 180 - self.aLidarFOVR / 2
 
         # determine the initial rotation angles
         self.aLidarRotFront = max(-1 * self.aRotLimFront, min(self.aRotLimFront, aRotFront * np.pi / 180))
@@ -78,19 +73,19 @@ class Vehicle(object):
 
         # set up the front lidar
         self.aLidarF = 0.0
-        self.lidar_front = Lidar(self.track, self.aLidarF, self.carFLOffset[0], 0, aFOVFront)
+        self.lidar_front = Lidar(self.track, self.aLidarF, self.carFLOffset[0], 0, self.aLidarFOVFront)
 
         # set up the left lidar
         self.aLidarL = -1.0 * np.pi / 2.0
         x0 = self.carFLOffset[0] - self.config['xVehicleLength'] / 2
         y0 = self.carFLOffset[1]
-        self.lidar_left = Lidar(self.track, self.aLidarL, x0, y0, aFOVL)
+        self.lidar_left = Lidar(self.track, self.aLidarL, x0, y0, self.aLidarFOVL)
 
         # set up the right lidar
         self.aLidarR = np.pi / 2.0
         x0 = self.carFROffset[0] - self.config['xVehicleLength'] / 2
         y0 = self.carFROffset[1]
-        self.lidar_right = Lidar(self.track, self.aLidarR, x0, y0, aFOVR)
+        self.lidar_right = Lidar(self.track, self.aLidarR, x0, y0, self.aLidarFOVR)
 
         # Apply the inital rotations
         self.lidar_front.rotate_lidar_by_delta(self.aLidarRotFront, self.lidar_front.x0, self.lidar_front.y0)
@@ -200,9 +195,10 @@ class Vehicle(object):
                 if len(collision_check) > 0:
                     # the vehicle has collided, no need to check the other colliders
                     self.bHasCollided = True
-                    # calculate the angle between the last track segment we collided with and the
-                    # vehicle forward direction unit vector. Use this to reset the vehicle heading
-                    aCollision = calc_angle_between_unit_vectors(self.h.v_hat,collision_check[-1].v_hat)
+                    # caclulate the heading of the collided track segment, set the vehicle
+                    # heading equal to this (parallel)
+                    lc = collision_check[-1]
+                    aCollision = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
                     break
 
         # check the outer track, only if the inner hasn't already collided
@@ -213,10 +209,10 @@ class Vehicle(object):
                 if len(collision_check) > 0:
                     # the vehicle has collided, no need to check the other colliders
                     self.bHasCollided = True
-                    # calculate the angle between the last track segment we collided with and the
-                    # vehicle forward direction unit vector. Use this to reset the vehicle heading
-                    # collision with the outer track needs a negative scaling on the angle
-                    aCollision = -1 * calc_angle_between_unit_vectors(self.h.v_hat,collision_check[-1].v_hat)
+                    # caclulate the heading of the collided track segment, set the vehicle
+                    # heading equal to this (parallel)
+                    lc = collision_check[-1]
+                    aCollision = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
                     break
 
         if self.bHasCollided:
