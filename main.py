@@ -11,7 +11,7 @@ def main():
     # instantiate the objects
     drv_in = DriverInputsRecv()
     veh_out = VehicleOutputsSend()
-    track = TrackHandler('octo_track')
+    track = TrackHandler('nardo')
     veh = Vehicle(1, track, 60, 60 ,60)
     vis = Vis(track, veh)
     run_game = True

@@ -113,6 +113,7 @@ class Line(object):
         self.y1 = self.p1[1]
         self.x2 = self.p2[0]
         self.y2 = self.p2[1]
+        
 
     def rotate_line_by_delta(self, aRot: float, cX: float, cY: float):
         """
@@ -129,8 +130,8 @@ class Line(object):
         self.y2 = self.p2[1]
 
         # update the vectors
-        self.set_unit_vector()
         self.set_vector()
+        self.set_unit_vector()
 
     def rotate_line_to_new_angle(self, aRot: float, cX: float, cY: float):
         """
@@ -149,8 +150,8 @@ class Line(object):
         self.y2 = self.p2[1]
 
         # update the vectors
-        self.set_unit_vector()
         self.set_vector()
+        self.set_unit_vector()
 
     def reset_line(self):
         """
@@ -314,7 +315,7 @@ def check_for_intersection_lineseg_circle(l: Line, c: Circle):
     """
     dy = l.y2 - l.y1
     dx = l.x2 - l.x1
-    # Using formula from wikipedia (work with distance squared to save calculating roots as it's slow): 
+    # Using formula from wikipedia (work with distance squared to save calculating roots as it's slow):
     d_numerator = ((dy * c.x0) - (dx * c.y0) + (l.x2 * l.y1) - (l.y2 * l.x1))
     d_denominator_sq = dy*dy + dx*dx
     d_sq = d_numerator * d_numerator / d_denominator_sq
@@ -323,7 +324,7 @@ def check_for_intersection_lineseg_circle(l: Line, c: Circle):
     if d_sq > r2:
         # Circle centre further from infinite line than circle radius ==> no intersection
         return False, None
-    
+
     # Vector from line p1 to circle centre
     dxc = c.x0 - l.x1
     dyc = c.y0 - l.y1
@@ -381,7 +382,7 @@ def check_for_intersection_lineseg_circle_old(l: Line, c: Circle):
     # check the distance from the circle centre to the line points. We're trying
     # to reduce the magnitude of the number involved in the calculcation here.
     # given the return value is t the returns will remain valid
-    
+
     large_threshold = float(100)
     d1 = calc_euclid_distance_2d(tuple(l.p1), (c.x0, c.y0))
     d2 = calc_euclid_distance_2d(tuple(l.p2), (c.x0, c.y0))
@@ -493,7 +494,7 @@ def calc_euclid_distance_2d_sq(p1: tuple, p2: tuple):
     """
         Returns the square of the euclidian distance between p1 and p2
 
-        Useful as it's much cheaper than calculating the actual distance 
+        Useful as it's much cheaper than calculating the actual distance
         (as it save a call to sqrt())
         and if checking a < b, then a^2 < b^2 will also give the correct value
     """
