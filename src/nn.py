@@ -28,7 +28,7 @@ class NeuralNetwork(object):
             for i,h in enumerate(hidden_layer_lens):
                 self.h_layers.append(np.zeros(h))
                 self.h_layers_b.append(np.ones(h))
-                if h == (len(hidden_layer_lens)-1):
+                if i == (len(hidden_layer_lens)-1):
                     # last layer, hook up onto outputs
                     self.h_layers_w.append(np.zeros((h, output_len)))
                 else:
@@ -41,7 +41,10 @@ class NeuralNetwork(object):
             self.h_layers_b = None
 
         # instantiate outputs
-        self.ouputs_b = np.ones(output_len)
+        self.outputs = np.zeros(output_len)
+        self.outputs_b = np.ones(output_len)
+
+        self.init_type = 'RANDO'
 
     def update_network(self, inputs):
         """
@@ -53,14 +56,14 @@ class NeuralNetwork(object):
             # set the hidden layers
             for i in range(0, len(self.h_layers)):
                 if i == 0:
-                    self.h_layers[i] = sigmoid_function(np.dot(self.inputs, self.inputs_w) + self.h_layers_b[i])
+                    self.h_layers[i] = self.sigmoid_function(np.dot(self.inputs, self.inputs_w) + self.h_layers_b[i])
                 else:
-                    self.h_layers[i] = sigmoid_function(np.dot(self.h_layers[i-1], self.h_layers_w[i-1]), self.h_layers_b[i])
+                    self.h_layers[i] = self.sigmoid_function(np.dot(self.h_layers[i-1], self.h_layers_w[i-1]) + self.h_layers_b[i])
             # update the outputs
-            self.outputs = sigmoid_function(np.dot(self.h_layers[-1], self.h_layers_w[-1]) + self.outputs_b)
+            self.outputs = self.sigmoid_function(np.dot(self.h_layers[-1], self.h_layers_w[-1]) + self.outputs_b)
         else:
             # No hidden layers - just update the ouputs
-            self.outputs = sigmoid_function(np.dot(self.inputs, self.inputs_w) + self.outputs_b)
+            self.outputs = self.sigmoid_function(np.dot(self.inputs, self.inputs_w) + self.outputs_b)
 
     def sigmoid_function(self, x):
         """

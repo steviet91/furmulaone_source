@@ -1,5 +1,5 @@
 from src.nn import NeuralNetwork
-
+import numpy as np
 
 
 class GeneticAlgorithm(object):
@@ -16,14 +16,14 @@ class GeneticAlgorithm(object):
         self.NInputs = num_inputs
         self.NHiddenLayerLengths = hidden_layer_lens
         self.NOutputs = num_outputs
-        self.rNewMembers = new_members  # percentage of brand new pop members in each generation
-        self.NNewMembers = np.floor(self.PopSize * per_new_members)
+        self.rNewMembers = per_new_members  # percentage of brand new pop members in each generation
+        self.NNewMembers = int(np.floor(self.NPopSize * per_new_members))
 
     def create_population(self, is_first=False, parents=[]):
         """
             Initialise the population
         """
-        self.fitness = [None] * self.NPopSize # set the fitness
+        self.fitness = np.zeros(self.NPopSize)
 
         if is_first:
             # this is the first population
@@ -52,12 +52,12 @@ class GeneticAlgorithm(object):
                     p_idx = (NCreationChoice-1) // 2
                     is_small = ((NCreationChoice-1) % 2 == 0)
                     if is_small:
-                        self.initialise_vars_small_mutation(parents[i].in_w, parents[i].h_w, self.pop[-1])
+                        self.initialise_vars_small_mutation(parents[p_idx].inputs_w, parents[p_idx].h_layers_w, self.pop[-1])
                     else:
-                        self.initialise_vars_mutation(parents[i].in_ws, parents[i].h_w, self.pop[-1])
+                        self.initialise_vars_mutation(parents[p_idx].inputs_w, parents[p_idx].h_layers_w, self.pop[-1])
             # initialise any brand new members to the population
             if self.NNewMembers > 0:
-                for i in range(self.NPopSize-self.NewMembers, self.NPopSize):
+                for i in range(self.NPopSize-self.NNewMembers, self.NPopSize):
                     self.pop.append(NeuralNetwork(self.NInputs, self.NOutputs, self.NHiddenLayerLengths))
                     self.initialise_vars_random(self.pop[-1])
 
@@ -76,27 +76,31 @@ class GeneticAlgorithm(object):
         """
             Initialise the weights with small mutations of the provdided weights bounded by -1 and 1
         """
-        nn.inputs_w = max(-1.0 , min(1.0, (in_w + np.random.rand(in_w.shape[0], in_w.shape[1]) * (GeneticAlgorithm._SMALLMUT * 2) - GeneticAlgorithm._SMALLMUT)))
+        nn.init_type = 'SMALL_MUT'
+        nn.inputs_w = np.maximum(-1.0 , np.minimum(1.0, (in_w + np.random.rand(in_w.shape[0], in_w.shape[1]) * (GeneticAlgorithm._SMALLMUT * 2) - GeneticAlgorithm._SMALLMUT)))
         if nn.h_layers is not None:
-            for i,h in nn.h_layers_w:
-                nn.h_layers_w[i] = max(-1.0 , min(1.0, (h_w + np.random.rand(h_w[i].shape[0], h_w[i].shape[1]) * (GeneticAlgorithm._SMALLMUT * 2) - GeneticAlgorithm._SMALLMUT)))
+            for i in range(0,len(nn.h_layers_w)):
+                nn.h_layers_w[i] = np.maximum(-1.0 , np.minimum(1.0, (h_w[i] + np.random.rand(h_w[i].shape[0], h_w[i].shape[1]) * (GeneticAlgorithm._SMALLMUT * 2) - GeneticAlgorithm._SMALLMUT)))
+
 
     def initialise_vars_mutation(self, in_w, h_w, nn):
         """
             Initialise the weights with mutations of the provdided weights bounded by -1 and 1
         """
-        nn.inputs_w = max(-1.0 , min(1.0, (in_w + np.random.rand(in_w.shape[0], in_w.shape[1]) * (GeneticAlgorithm._MUT * 2) - GeneticAlgorithm._MUT)))
+        nn.init_type = 'MUT'
+        nn.inputs_w = np.maximum(-1.0 , np.minimum(1.0, (in_w + np.random.rand(in_w.shape[0], in_w.shape[1]) * (GeneticAlgorithm._MUT * 2) - GeneticAlgorithm._MUT)))
         if nn.h_layers is not None:
-            for i,h in nn.h_layers_w:
-                nn.h_layers_w[i] = max(-1.0 , min(1.0, (h_w + np.random.rand(h_w[i].shape[0], h_w[i].shape[1]) * (GeneticAlgorithm._MUT * 2) - GeneticAlgorithm._MUT)))
+            for i in range(0,len(nn.h_layers_w)):
+                nn.h_layers_w[i] = np.maximum(-1.0 , np.minimum(1.0, (h_w[i] + np.random.rand(h_w[i].shape[0], h_w[i].shape[1]) * (GeneticAlgorithm._MUT * 2) - GeneticAlgorithm._MUT)))
 
     def initialise_vars_crossover(self, in_ws, h_ws, nn):
         """
             Initialise the weights by cross breeding the list of parents
         """
         NParents = len(in_ws)
+        nn.init_type = 'CROSS'
         # input weights - generate an array of random numbers between 0 and number of parants
-        w = np.random.randint(NParents, size=(in_w[0].shape[0], in_w[0].shape[1]))
+        w = np.random.randint(NParents, size=(in_ws[0].shape[0], in_ws[0].shape[1]))
         for i in range(0,NParents):
             nn.inputs_w[w == i] = in_ws[i][w == i]
 

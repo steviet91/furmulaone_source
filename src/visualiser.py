@@ -62,11 +62,17 @@ class Vis(object):
         self.vyCamera = 0.0
         self.vCamera = 0.0
 
-    def draw_car(self):
+    def set_vehicle(self, veh):
+        """
+            Set the vehicle object
+        """
+        self.vehicle = veh
 
+    def reset_image(self):
         # create a copy of the base image
         self.show_img = np.copy(self.orig_img)
 
+    def draw_car(self):
         # translate the visual based on the new position
         self.carPos = self.vehicle.posVehicle / self.img_scale + self.cameraPosOrigin - self.cameraPos
 
@@ -93,58 +99,63 @@ class Vis(object):
         """
             Mass spring damper system to move the carmera in order to track the vehicles movement
         """
-        # determine the elapsed time
-        if self.tLastCamUpdate is None:
-            self.tLastCamUpdate = time.time()
-            bElapsedTimeAvailable = False  # no elapsed time yet
-        else:
-            tNow = time.time()
-            tElapsed = tNow - self.tLastCamUpdate
-            self.tLastCamUpdate = tNow
-            bElapsedTimeAvailable = True
-
-        # mass, spring, damper method
-        # Force acting on the camera
-        if self.vehicle.bHasCollided:
-            self.reset_camera()
-        else:
-
-            # calculate the spring length
-            xCameraVehicle = calc_euclid_distance_2d(tuple(self.vehicle.posVehicle), tuple(self.cameraPosRaw))
-
-            # calcuate the velocity delta between the car and camera
-            if bElapsedTimeAvailable:
-                if tElapsed != 0.0:
-                    xdotCameraVehicle = (xCameraVehicle - self.xCameraVehicle) / tElapsed
-                else:
-                    # div by zero protection
-                    xdotCameraVehicle = 0.0
-                self.xCameraVehicle = xCameraVehicle
+        if self.config['camera']['use_spring']:
+            # determine the elapsed time
+            if self.tLastCamUpdate is None:
+                self.tLastCamUpdate = time.time()
+                bElapsedTimeAvailable = False  # no elapsed time yet
             else:
-                xdotCameraVehicle = 0.0
+                tNow = time.time()
+                tElapsed = tNow - self.tLastCamUpdate
+                self.tLastCamUpdate = tNow
+                bElapsedTimeAvailable = True
 
-            # calculate the resultant force on the camera
-            FCamera = max(self.kCameraSpring * xCameraVehicle + xdotCameraVehicle * self.cCameraDamper - self.mu_camera * self.mCamera * 9.81, 0.0)
+            # mass, spring, damper method
+            # Force acting on the camera
+            if self.vehicle.bHasCollided:
+                self.reset_camera()
+            else:
 
-            # calculate the angle between the camera and vehicle
-            aCamVeh = np.arctan2(self.vehicle.posVehicle[1] - self.cameraPosRaw[1], self.vehicle.posVehicle[0] - self.cameraPosRaw[0])
-            # calculate the component forces
-            FxCamera = FCamera * np.cos(aCamVeh)
-            FyCamera = FCamera * np.sin(aCamVeh)
-            # calculate the accelerations
-            gxCamera = FxCamera / self.mCamera
-            gyCamera = FyCamera / self.mCamera
+                # calculate the spring length
+                xCameraVehicle = calc_euclid_distance_2d(tuple(self.vehicle.posVehicle), tuple(self.cameraPosRaw))
 
-            # integrate the accelerations
-            if bElapsedTimeAvailable:
-                self.vxCamera += gxCamera * tElapsed
-                self.vyCamera += gyCamera * tElapsed
-                self.vCamera = np.sqrt(self.vxCamera**2 + self.vyCamera**2)
-                self.cameraPosRaw[0] += self.vxCamera * tElapsed
-                self.cameraPosRaw[1] += self.vyCamera * tElapsed
+                # calcuate the velocity delta between the car and camera
+                if bElapsedTimeAvailable:
+                    if tElapsed != 0.0:
+                        xdotCameraVehicle = (xCameraVehicle - self.xCameraVehicle) / tElapsed
+                    else:
+                        # div by zero protection
+                        xdotCameraVehicle = 0.0
+                    self.xCameraVehicle = xCameraVehicle
+                else:
+                    xdotCameraVehicle = 0.0
 
-            self.update_camera_scale()
-            self.cameraPos = self.cameraPosRaw / self.img_scale
+                # calculate the resultant force on the camera
+                FCamera = max(self.kCameraSpring * xCameraVehicle + xdotCameraVehicle * self.cCameraDamper - self.mu_camera * self.mCamera * 9.81, 0.0)
+
+                # calculate the angle between the camera and vehicle
+                aCamVeh = np.arctan2(self.vehicle.posVehicle[1] - self.cameraPosRaw[1], self.vehicle.posVehicle[0] - self.cameraPosRaw[0])
+                # calculate the component forces
+                FxCamera = FCamera * np.cos(aCamVeh)
+                FyCamera = FCamera * np.sin(aCamVeh)
+                # calculate the accelerations
+                gxCamera = FxCamera / self.mCamera
+                gyCamera = FyCamera / self.mCamera
+
+                # integrate the accelerations
+                if bElapsedTimeAvailable:
+                    self.vxCamera += gxCamera * tElapsed
+                    self.vyCamera += gyCamera * tElapsed
+                    self.vCamera = np.sqrt(self.vxCamera**2 + self.vyCamera**2)
+                    self.cameraPosRaw[0] += self.vxCamera * tElapsed
+                    self.cameraPosRaw[1] += self.vyCamera * tElapsed
+        else:
+            self.cameraPosRaw[0] = self.vehicle.posVehicle[0]
+            self.cameraPosRaw[1] = self.vehicle.posVehicle[1]
+
+        self.update_camera_scale()
+        self.cameraPos = self.cameraPosRaw / self.img_scale
+
 
     def draw_data(self):
         """
