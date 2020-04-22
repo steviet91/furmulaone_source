@@ -4,8 +4,8 @@ import numpy as np
 
 class GeneticAlgorithm(object):
 
-    _SMALLMUT = 0.01
-    _MUT = 0.1
+    _SMALLMUT = 0.0001
+    _MUT = 0.01
 
     def __init__(self, max_gens=20, population_size=20, num_inputs=9, num_outputs=3, hidden_layer_lens=[], per_new_members=0):
         """

@@ -7,7 +7,6 @@ from .geom import calc_euclid_distance_2d
 from .lidar import Lidar
 import time
 
-
 class Vis(object):
 
     def __init__(self, track: TrackHandler, vehicle: Vehicle):
@@ -40,7 +39,7 @@ class Vis(object):
         self.tLastCamUpdate = None
         self.carPos = np.array([0, 0]) + self.cameraPosOrigin
         # set the camera position equal to the vehicle (scaled properly)
-        self.cameraPosRaw = self.vehicle.posVehicle
+        self.cameraPosRaw = np.copy(self.vehicle.posVehicle)
         self.update_camera_scale()
         self.cameraPos = self.vehicle.posVehicle / self.img_scale
         self.reset_camera()
@@ -150,8 +149,7 @@ class Vis(object):
                     self.cameraPosRaw[0] += self.vxCamera * tElapsed
                     self.cameraPosRaw[1] += self.vyCamera * tElapsed
         else:
-            self.cameraPosRaw[0] = self.vehicle.posVehicle[0]
-            self.cameraPosRaw[1] = self.vehicle.posVehicle[1]
+            self.cameraPosRaw = np.copy(self.vehicle.posVehicle)
 
         self.update_camera_scale()
         self.cameraPos = self.cameraPosRaw / self.img_scale

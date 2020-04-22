@@ -77,13 +77,14 @@ def main():
     track = TrackHandler('dodec_track')
     gp = GamePad()
     run_game = True
-    pop_size = 100
+    pop_size = 300
     num_inputs = Lidar._NRays * 3
     gen_number = 0
-    max_gens = 5
-    num_parents = 2
+    max_gens = 15
+    num_parents = 4
     task_rate = 0.1
     per_new_members = 0.2
+    num_car_render = 50
 
     # TODO:
     # initialise the ga
@@ -127,6 +128,7 @@ def main():
             vis.update_camera_position()
             # draw the track
             vis.draw_track()
+            vis.draw_demands()
 
             # update the living populus
             for i in range(0, pop_size):
@@ -139,8 +141,10 @@ def main():
                     if is_alive[i]:
                         update_fitness(i, ga, vehs[i])
 
-                # render the car
-                vis.set_vehicle(vehs[i])
+            # render the car top N cars
+            idxs = np.argpartition(ga.fitness, -1 * num_car_render)[-1 * num_car_render:]
+            for i in idxs:
+                vis.set_vehicle(vehs[int(i)])
                 vis.draw_car()
 
             # render the vis
