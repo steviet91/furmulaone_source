@@ -266,8 +266,6 @@ class Vehicle(object):
                     self.bHasCollided = True
                     # caclulate the heading of the collided track segment, set the vehicle
                     # heading equal to this (parallel)
-                    lc = collision_check[-1]
-                    aCollision = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
                     break
 
         # check the outer track, only if the inner hasn't already collided
@@ -280,19 +278,21 @@ class Vehicle(object):
                     self.bHasCollided = True
                     # caclulate the heading of the collided track segment, set the vehicle
                     # heading equal to this (parallel)
-                    lc = collision_check[-1]
-                    aCollision = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
                     break
-
 
         if self.bHasCollided:
             # add a lap time penalty in the track
             self.tLapPen += 10.0
+            lc = self.track.data.cent_lines[self.NLapIdx]
+            daCollRes = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
+            dxCollRes = lc.x1 - self.posVehicle[0]
+            dyCollRes = lc.y1 - self.posVehicle[1]
+
             if  self.bAutoReset:
                 # move the car back by 2 * dposVehicle to give the driver a chance to recover
-                self.apply_manual_translation(-2 * self.dxVehicle, -2 * self.dyVehicle)
+                self.apply_manual_translation(dxCollRes, dyCollRes)
                 # realign the car so it's paralled with the track segment
-                self.apply_manual_rotation(aCollision)
+                self.apply_manual_rotation(daCollRes)
 
                 # reset the vehicle states
                 self.reset_states()
@@ -590,8 +590,5 @@ class Vehicle(object):
             self.bMovingBackwards = True
         else:
             self.bMovingBackwards = False
-
-        if rLapProgress < self.rLapProgress:
-            print(self.rLapProgress, self.NLapIdx, self.bMovingBackwards, bNewLap)
 
         self.rLapProgress = rLapProgress
