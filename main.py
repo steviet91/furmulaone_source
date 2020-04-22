@@ -11,7 +11,7 @@ def main():
     # instantiate the objects
     drv_in = DriverInputsRecv()
     veh_out = VehicleOutputsSend()
-    track = TrackHandler('nardo')
+    track = TrackHandler('dodec_track')
     veh = Vehicle(1, track, 60, 60 ,60)
     vis = Vis(track, veh)
     run_game = True
@@ -19,6 +19,10 @@ def main():
     aLidarFront = 0.0 # angle from their nominal
     aLidarLeft = 0.0 # angle from their nominal
     aLidarRight = 0.0 # angle from their nominal
+    rThrottlePedalDemand = 0.0
+    rBrakePedalDemand = 0.0
+    aSteeringWheelDemand = 0.0
+    t = time.time()
 
     while run_game:
         # Check user inputs
@@ -33,27 +37,19 @@ def main():
                 vis.reset_camera()
 
             # set the car controls
-            veh.set_driver_inputs(input_data['rThrottlePedalDemanded'],
-                                    input_data['rBrakePedalDemanded'],
-                                    input_data['aSteeringWheelDemanded'])
+            rThrottlePedalDemand = input_data['rThrottlePedalDemanded']
+            rBrakePedalDemand = input_data['rBrakePedalDemanded']
+            aSteeringWheelDemand = input_data['aSteeringWheelDemanded']
 
             # lidar angle
             aLidarFront = input_data['aLidarFront']
             aLidarLeft = input_data['aLidarLeft']
             aLidarRight = input_data['aLidarRight']
 
-        # Update the dynamics
-        veh.update_long_dynamics()
-        veh.update_lat_dynamics()
-
-        # update vehicle position
-        veh.update_position()
-
-        # check for collision with track model
-        veh.check_for_vehicle_collision()
-
-        # fire the lidars
-        veh.update_lidars(aRotFront=aLidarFront, aRotL=aLidarLeft, aRotR=aLidarRight)
+        # Run a vehicle update
+        veh.update(rThrottlePedalDemand, rBrakePedalDemand, aSteeringWheelDemand,
+                    aRotFront=aLidarFront, aRotL=aLidarLeft, aRotR=aLidarRight, task_rate=time.time()-t)
+        t = time.time()
 
         # draw the visualisation
         vis.draw_car()
@@ -63,17 +59,13 @@ def main():
         vis.render_image()
         vis.update_camera_position()
 
-        # check the lap data
-        track.check_new_lap(veh.posVehicle[0], veh.posVehicle[1])
-
         # send the vehicle output dat aacross the network
         veh_out.set_vehicle_sensors(veh.get_vehicle_sensors())
         veh_out.set_lidar_data(veh.lidar_front.collision_array,
                                 veh.lidar_left.collision_array,
                                 veh.lidar_right.collision_array)
         veh_out.send_data()
-
-        sleep(0.01)
+        sleep(0.001)
 
 
 

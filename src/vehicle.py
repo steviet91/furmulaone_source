@@ -10,7 +10,7 @@ from .geom import calc_angle_between_unit_vectors
 from .lidar import Lidar
 
 class Vehicle(object):
-    def __init__(self, id: int, track: Track, aLidarFOVFront: float, aLidarFOVL: float, aLidarFOVR: float):
+    def __init__(self, id: int, track: Track, aLidarFOVFront: float, aLidarFOVL: float, aLidarFOVR: float, task_rate=0.01, auto_reset=True):
         """
             Initialise the vehicle object
         """
@@ -20,6 +20,8 @@ class Vehicle(object):
         self.aLidarFOVFront = aLidarFOVFront * np.pi / 180
         self.aLidarFOVL = aLidarFOVL * np.pi / 180
         self.aLidarFOVR = aLidarFOVR * np.pi / 180
+        self.bAutoReset = auto_reset
+        self.tTask = task_rate
 
         # Get the module path
         self.module_path = os.path.dirname(os.path.abspath(__file__))
@@ -28,21 +30,14 @@ class Vehicle(object):
         with open(self.module_path + '/../setup/vehicle_config.json', 'r') as f:
             self.config = json.load(f)
 
-        # create timers
-        self.tLastInputUpdate = None
-        self.tLastLongUpdate = None
-        self.tLastLatUpdate = None
-        self.tLastPosUpdate = None
-        self.tLastLidarUpdate = None
-
         # create the car corner point offsets
         self.carFLOffset = np.array([self.config['xVehicleLength'] * self.config['rCOGLongR'], -0.5 * self.config['xVehicleWidth']])
         self.carFROffset = np.array([self.config['xVehicleLength'] * self.config['rCOGLongR'], 0.5 * self.config['xVehicleWidth']])
         self.carRLOffset = np.array([-1 * self.config['xVehicleLength'] * (1 - self.config['rCOGLongR']), -0.5 * self.config['xVehicleWidth']])
         self.carRROffset = np.array([-1 * self.config['xVehicleLength'] * (1 - self.config['rCOGLongR']), 0.5 * self.config['xVehicleWidth']])
-
-        # create addition vehicle properties
-        self.initialise_vehicle_properties()
+        self.xCOGF = self.config['xWheelBase'] * self.config['rCOGLongR']
+        self.xCOGR = self.config['xWheelBase'] * (1 - self.config['rCOGLongR'])
+        self.FBrakingMax = self.config['mVehicle'] * self.config['gGravity'] * 0.8  # leave some capacity for lat
 
         # create the lidars
         self.initialise_lidars()
@@ -56,6 +51,84 @@ class Vehicle(object):
         # create lidar object
         self.lidars = None
 
+        # initialise vehicle progress variables
+        self.bNewLap = False
+        self.bCarNearStartLine = False
+        self.tLap = []
+        self.tLapPen = 0.0
+        self.tLapLive = 0.0
+        self.NLapsComplete = -1
+        self.rLapProgress = 0.0
+        self.NLapIdx = 0
+        self.bMovingBackwards = False
+
+    # ####################
+    # INITIAL CONDITIONS #
+    # ####################
+    def reset_states(self):
+        """
+            Reset the vehicle states
+        """
+        self.rThrottlePedal = 0.0
+        self.rBrakePedal = 0.0
+        self.aSteeringWheel = 0.0
+        self.rSlipF = 0.0
+        self.rSlipR = 0.0
+        self.aSlipF = 0.0
+        self.aSlipR = 0.0
+        self.aSteer = 0.0
+        self.vVehicle = self.config['vVehicleStationary']
+        self.vxVehicle = self.config['vVehicleStationary']
+        self.vyVehicle = self.config['vVehicleStationary']
+        self.gxVehicle = 0.0
+        self.gyVehicle = 0.0
+        self.nWheelR = 0.0
+        self.nWheelF = 0.0
+        self.ndotWheelR = 0.0
+        self.ndotWheelF = 0.0
+        self.FTyreXTotalF = 0.0
+        self.FTyreYTotalF = 0.0
+        self.FTyreXTotalR = 0.0
+        self.FTyreYTotalR = 0.0
+        self.aBodySlip = 0.0
+        self.daYaw = 0.0
+        self.nYaw = 0.0
+        self.ndotYaw = 0.0
+        self.dxVehicle = 0.0
+        self.dyVehicle = 0.0
+        self.bHasCollided = False
+
+    def reset_vehicle_position(self):
+        """
+            Reset the vehicle position to (0,0)
+        """
+        self.posVehicle = np.array([0.0, 0.0], dtype=np.float64)
+        self.aYaw = 0.0
+        self.h = Line(tuple(self.posVehicle), (1.0, 0.0))  # provides a unit vector for vehicle heading
+        # reinitialise the vehicle colliders
+        self.initialise_vehicle_colliders()
+        self.initialise_lidars(aRotL=self.aLidarRotL, aRotR=self.aLidarRotR, aRotFront=self.aLidarRotFront)
+
+    # #################
+    # STANDARD UPDATE #
+    # #################
+    def update(self, rThrottlePedalDemand: float, rBrakePedalDemand: float, aSteeringWheelDemand: float, aRotFront: float=0, aRotL: float=0, aRotR: float=0, task_rate=None):
+        """
+            Run through the standard set of update functions for a single time step - user can manually set the task rate for manual driving at wall time
+        """
+        if task_rate is not None:
+            self.tTask = task_rate
+        self.set_driver_inputs(rThrottlePedalDemand, rBrakePedalDemand, aSteeringWheelDemand)
+        self.update_long_dynamics()
+        self.update_lat_dynamics()
+        self.update_position()
+        self.check_for_vehicle_collision()
+        self.update_lidars(aRotFront, aRotL, aRotR)
+        self.update_vehicle_progress()
+
+    # ########
+    # LIDARS #
+    # ########
     def initialise_lidars(self, aRotL: float = 0.0, aRotR: float = 0.0, aRotFront: float = 0.0):
         """
             Set up the LIDAR objects
@@ -97,46 +170,42 @@ class Vehicle(object):
         """
             Apply any rotation to the lidar (relative to the vehicle) and fire the liders
         """
-        # apply the rotations
-        if self.tLastLidarUpdate is None:
-            self.tLastLidarUpdate = time.time()
-            tElapsed = 0.0
+        # calc the raw rates
+        if self.tTask == 0.0:
+            daRotFrontRaw = 0.0
+            daRotLRaw = 0.0
+            daRotRRaw = 0.0
         else:
-            tNow = time.time()
-            tElapsed = tNow - self.tLastLidarUpdate
-            self.tLastLidarUpdate = tNow
+            daRotFrontRaw = (aRotFront * np.pi / 180 - self.aLidarRotFront) / self.tTask
+            daRotLRaw = (aRotL * np.pi / 180 - self.aLidarRotL) / self.tTask
+            daRotRRaw = (aRotR * np.pi / 180 - self.aLidarRotR) / self.tTask
 
-        if tElapsed > 0.0:
-            # front
-            daRotFrontRaw = (aRotFront * np.pi / 180 - self.aLidarRotFront) / tElapsed
-            if abs(daRotFrontRaw) > 0.0:
-                daRotFront = self.process_lidar_rotation(daRotFrontRaw, self.aLidarRotFront, self.aRotLimFront, tElapsed)
-                if abs(daRotFront) > 0.0:
-                    self.lidar_front.rotate_lidar_by_delta(daRotFront, self.lidar_front.x0, self.lidar_front.y0)
-                    self.aLidarRotFront += daRotFront
+        if abs(daRotFrontRaw) > 0.0:
+            daRotFront = self.process_lidar_rotation(daRotFrontRaw, self.aLidarRotFront, self.aRotLimFront, self.tTask)
+            if abs(daRotFront) > 0.0:
+                self.lidar_front.rotate_lidar_by_delta(daRotFront, self.lidar_front.x0, self.lidar_front.y0)
+                self.aLidarRotFront += daRotFront
 
-            # left
-            daRotLRaw = (aRotL * np.pi / 180 - self.aLidarRotL) / tElapsed
-            if abs(daRotLRaw) > 0.0:
-                daRotL = self.process_lidar_rotation(daRotLRaw, self.aLidarRotL, self.aRotLimL, tElapsed)
-                if abs(daRotL) > 0.0:
-                    self.lidar_left.rotate_lidar_by_delta(daRotL, self.lidar_left.x0, self.lidar_left.y0)
-                    self.aLidarRotL += daRotL
+        # left
+        if abs(daRotLRaw) > 0.0:
+            daRotL = self.process_lidar_rotation(daRotLRaw, self.aLidarRotL, self.aRotLimL, self.tTask)
+            if abs(daRotL) > 0.0:
+                self.lidar_left.rotate_lidar_by_delta(daRotL, self.lidar_left.x0, self.lidar_left.y0)
+                self.aLidarRotL += daRotL
 
-            # right
-            daRotRRaw = (aRotR * np.pi / 180 - self.aLidarRotR) / tElapsed
-            if abs(daRotRRaw) > 0.0:
-                daRotR = self.process_lidar_rotation(daRotRRaw, self.aLidarRotR, self.aRotLimR, tElapsed)
-                if abs(daRotR) > 0.0:
-                    self.lidar_right.rotate_lidar_by_delta(daRotR, self.lidar_right.x0, self.lidar_right.y0)
-                    self.aLidarRotR += daRotR
+        # right
+        if abs(daRotRRaw) > 0.0:
+            daRotR = self.process_lidar_rotation(daRotRRaw, self.aLidarRotR, self.aRotLimR, self.tTask)
+            if abs(daRotR) > 0.0:
+                self.lidar_right.rotate_lidar_by_delta(daRotR, self.lidar_right.x0, self.lidar_right.y0)
+                self.aLidarRotR += daRotR
 
         # fire the lidar rays
         self.lidar_front.fire_lidar()
         self.lidar_left.fire_lidar()
         self.lidar_right.fire_lidar()
 
-    def process_lidar_rotation(self, daRotRaw: float, aRotCurrent: float, aRotMax: float, tElapsed: float):
+    def process_lidar_rotation(self, daRotRaw: float, aRotCurrent: float, aRotMax: float):
         """
             Process the lidar rotation and return a delta angle
         """
@@ -147,7 +216,7 @@ class Vehicle(object):
             else:
                 daRotRaw = self.config['daLidarRotMax']
 
-        daRotRaw = daRotRaw * tElapsed
+        daRotRaw = daRotRaw * self.tTask
 
         aRotNew = aRotCurrent + daRotRaw
 
@@ -158,7 +227,9 @@ class Vehicle(object):
 
         return aRotNew - aRotCurrent
 
-
+    # #################
+    # COLLISION MODEL #
+    # #################
     def initialise_vehicle_colliders(self):
         """
             Set up the collider objects to detect track limit collision
@@ -185,8 +256,6 @@ class Vehicle(object):
         # find the indexes of the lines to check for collision
         in_idxs, out_idxs = self.track.get_line_idxs_for_collision(self.collisionCircle)
 
-        self.bHasCollided = False
-
         # check the inner track
         if len(in_idxs) > 0:
             check_lines = [self.track.data.in_lines[i] for i in in_idxs]
@@ -197,8 +266,6 @@ class Vehicle(object):
                     self.bHasCollided = True
                     # caclulate the heading of the collided track segment, set the vehicle
                     # heading equal to this (parallel)
-                    lc = collision_check[-1]
-                    aCollision = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
                     break
 
         # check the outer track, only if the inner hasn't already collided
@@ -211,61 +278,26 @@ class Vehicle(object):
                     self.bHasCollided = True
                     # caclulate the heading of the collided track segment, set the vehicle
                     # heading equal to this (parallel)
-                    lc = collision_check[-1]
-                    aCollision = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
                     break
 
         if self.bHasCollided:
-            # move the car back by 2 * dposVehicle to give the driver a chance to recover
-            self.apply_manual_translation(-2 * self.dxVehicle, -2 * self.dyVehicle)
-            # realign the car so it's paralled with the track segment
-            self.apply_manual_rotation(aCollision)
-
-            # reset the vehicle states
-            self.reset_states()
-
             # add a lap time penalty in the track
-            self.track.add_lap_time_penalty(10.0)
+            self.tLapPen += 10.0
+            lc = self.track.data.cent_lines[self.NLapIdx]
+            daCollRes = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
+            dxCollRes = lc.x1 - self.posVehicle[0]
+            dyCollRes = lc.y1 - self.posVehicle[1]
 
-    def apply_manual_translation(self, dX: float, dY):
-        """
-            Apply a manual translation to all vehicle objects - mainly used for collisions
-        """
-        # vehicle position
-        self.posVehicle[0] += dX
-        self.posVehicle[1] += dY
+            if  self.bAutoReset:
+                # move the car back by 2 * dposVehicle to give the driver a chance to recover
+                self.apply_manual_translation(dxCollRes, dyCollRes)
+                # realign the car so it's paralled with the track segment
+                self.apply_manual_rotation(daCollRes)
 
-        # vehicle heading vector
-        self.h.translate_line_by_delta(dX, dY)
+                # reset the vehicle states
+                self.reset_states()
 
-        # vehicle collision objects
-        for l in self.colliders:
-            l.translate_line_by_delta(dX, dY)
-        self.collisionCircle.update_centre_by_delta(dX, dY)
 
-        # lidars
-        self.lidar_front.translate_lidars_by_delta(dX, dY)
-        self.lidar_left.translate_lidars_by_delta(dX, dY)
-        self.lidar_right.translate_lidars_by_delta(dX, dY)
-
-    def apply_manual_rotation(self, daRot: float):
-        """
-            Apply a manual rotation to all vehicle objects - mainly used for collisions
-        """
-        # vehicle yaw
-        self.aYaw += daRot
-
-        # vehicle heading vector
-        self.h.rotate_line_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
-
-        # vehicle collision objects
-        for l in self.colliders:
-            l.rotate_line_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
-
-        # lidars
-        self.lidar_front.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
-        self.lidar_left.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
-        self.lidar_right.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
 
     def get_collision_state(self, l1, l2):
         """
@@ -274,58 +306,9 @@ class Vehicle(object):
         do_intersect, _ = check_for_intersection_lineseg_lineseg(l1, l2)
         return do_intersect
 
-    def reset_states(self):
-        """
-            Reset the vehicle states
-        """
-        self.rThrottlePedal = 0.0
-        self.rBrakePedal = 0.0
-        self.aSteeringWheel = 0.0
-        self.rSlipF = 0.0
-        self.rSlipR = 0.0
-        self.aSlipF = 0.0
-        self.aSlipR = 0.0
-        self.aSteer = 0.0
-        self.vVehicle = self.config['vVehicleStationary']
-        self.vxVehicle = self.config['vVehicleStationary']
-        self.vyVehicle = self.config['vVehicleStationary']
-        self.gxVehicle = 0.0
-        self.gyVehicle = 0.0
-        self.nWheelR = 0.0
-        self.nWheelF = 0.0
-        self.ndotWheelR = 0.0
-        self.ndotWheelF = 0.0
-        self.FTyreXTotalF = 0.0
-        self.FTyreYTotalF = 0.0
-        self.FTyreXTotalR = 0.0
-        self.FTyreYTotalR = 0.0
-        self.aBodySlip = 0.0
-        self.daYaw = 0.0
-        self.nYaw = 0.0
-        self.ndotYaw = 0.0
-        self.dxVehicle = 0.0
-        self.dyVehicle = 0.0
-
-
-    def reset_vehicle_position(self):
-        """
-            Reset the vehicle position to (0,0)
-        """
-        self.posVehicle = np.array([0.0, 0.0], dtype=np.float64)
-        self.aYaw = 0.0
-        self.h = Line(tuple(self.posVehicle), (1.0, 0.0))  # provides a unit vector for vehicle heading
-        # reinitialise the vehicle colliders
-        self.initialise_vehicle_colliders()
-        self.initialise_lidars(aRotL=self.aLidarRotL, aRotR=self.aLidarRotR, aRotFront=self.aLidarRotFront)
-
-    def initialise_vehicle_properties(self):
-        """
-            Initialise some more properties using the config
-        """
-        self.xCOGF = self.config['xWheelBase'] * self.config['rCOGLongR']
-        self.xCOGR = self.config['xWheelBase'] * (1 - self.config['rCOGLongR'])
-        self.FBrakingMax = self.config['mVehicle'] * self.config['gGravity'] * 0.8  # leave some capacity for lat
-
+    # ###############
+    # DRIVER INPUTS #
+    # ###############
     def set_driver_inputs(self, rThrottlePedalDemand: float, rBrakePedalDemand: float, aSteeringWheelDemand: float):
         """
             Update the steering inputs
@@ -344,40 +327,34 @@ class Vehicle(object):
         #
         # Check the input rates
         #
-        if self.tLastInputUpdate is None:
-            self.tLastInputUpdate = time.time()
-            tElapsed = 0.0
+        if self.tTask == 0.0:
             drThrottlePedal = 0.0
             drBrakePedal = 0.0
             nSteeringWheel = 0.0
         else:
-            tNow = time.time()
-            tElapsed = tNow - self.tLastInputUpdate
-            self.tLastInputUpdate = tNow
-            if tElapsed != 0.0:
-                drThrottlePedal = (rThrottlePedalDemand - self.rThrottlePedal) / tElapsed
-                drBrakePedal = (rBrakePedalDemand - self.rBrakePedal) / tElapsed
-                nSteeringWheel = (aSteeringWheelDemand - self.aSteeringWheel) / tElapsed
-            else:
-                drThrottlePedal = 0.0
-                drBrakePedal = 0.0
-                nSteeringWheel = 0.0
+            drThrottlePedal = (rThrottlePedalDemand - self.rThrottlePedal) / self.tTask
+            drBrakePedal = (rBrakePedalDemand - self.rBrakePedal) / self.tTask
+            nSteeringWheel = (aSteeringWheelDemand - self.aSteeringWheel) / self.tTask
+
         # update throttle
         if drThrottlePedal < 0:
-            self.rThrottlePedal -= min(abs(drThrottlePedal), self.config['drThrottlePedalMax']) * tElapsed
+            self.rThrottlePedal -= min(abs(drThrottlePedal), self.config['drThrottlePedalMax']) * self.tTask
         else:
-            self.rThrottlePedal += min(drThrottlePedal, self.config['drThrottlePedalMax']) * tElapsed
+            self.rThrottlePedal += min(drThrottlePedal, self.config['drThrottlePedalMax']) * self.tTask
         # update brake
         if drBrakePedal < 0:
-            self.rBrakePedal -= min(abs(drBrakePedal), self.config['drBrakePedalMax']) * tElapsed
+            self.rBrakePedal -= min(abs(drBrakePedal), self.config['drBrakePedalMax']) * self.tTask
         else:
-            self.rBrakePedal += min(drBrakePedal, self.config['drBrakePedalMax']) * tElapsed
+            self.rBrakePedal += min(drBrakePedal, self.config['drBrakePedalMax']) * self.tTask
         # update steering
         if nSteeringWheel < 0:
-            self.aSteeringWheel -= min(abs(nSteeringWheel), self.config['nSteeringWheelMax']) * tElapsed
+            self.aSteeringWheel -= min(abs(nSteeringWheel), self.config['nSteeringWheelMax']) * self.tTask
         else:
-            self.aSteeringWheel += min(nSteeringWheel, self.config['nSteeringWheelMax']) * tElapsed
+            self.aSteeringWheel += min(nSteeringWheel, self.config['nSteeringWheelMax']) * self.tTask
 
+    # ##################
+    # VEHICLE DYNAMICS #
+    # ##################
     def update_long_dynamics(self):
         """
             Update the vehicle longitudinal dynamics
@@ -422,16 +399,10 @@ class Vehicle(object):
         #
         # calculate the velocity
         #
-        if self.tLastLongUpdate is None:
-            self.tLastLongUpdate = time.time()
-        else:
-            tNow = time.time()
-            tElapsed = tNow - self.tLastLongUpdate
-            self.tLastLongUpdate = tNow
-            self.vxVehicle += self.gxVehicle * tElapsed
-            # check for underflow
-            if abs(self.vxVehicle) < self.config['vVehicleStationary']:
-                self.vxVehicle = self.config['vVehicleStationary'] * np.sign(self.vxVehicle)
+        self.vxVehicle += self.gxVehicle * self.tTask
+        # check for underflow
+        if abs(self.vxVehicle) < self.config['vVehicleStationary']:
+            self.vxVehicle = self.config['vVehicleStationary'] * np.sign(self.vxVehicle)
         #
         # Update the wheel speeds
         #
@@ -473,26 +444,105 @@ class Vehicle(object):
         self.gyVehicle = (self.FTyreYTotalF + self.FTyreYTotalR) / self.config['mVehicle'] - self.vxVehicle * self.nYaw
         self.ndotYaw = (self.xCOGF * self.FTyreYTotalF - self.xCOGF * self.FTyreYTotalR) / self.config['jVehicleZZ']
 
-        # calculate the velocities and angles
-        if self.tLastLatUpdate is None:
-            self.tLastLatUpdate = time.time()
-        else:
-            tNow = time.time()
-            tElapsed = tNow - self.tLastLatUpdate
-            self.tLastLatUpdate = tNow
-            self.vyVehicle += self.gyVehicle * tElapsed
 
-            # if abs(self.vyVehicle) < self.config['vVehicleStationary']:
-            #    self.vyVehicle = self.config['vVehicleStationary']
-            if abs(self.vxVehicle) <= self.config['vVehicleStationary']:
-                self.vyVehicle = 0.0
-            self.nYaw += self.ndotYaw * tElapsed
+        self.vyVehicle += self.gyVehicle * self.tTask
+
+        # if abs(self.vyVehicle) < self.config['vVehicleStationary']:
+        #    self.vyVehicle = self.config['vVehicleStationary']
+        if abs(self.vxVehicle) <= self.config['vVehicleStationary']:
+            self.vyVehicle = 0.0
+        self.nYaw += self.ndotYaw * self.tTask
 
         # calculate velocity and body slip
         self.aBodySlip = np.arctan(self.vyVehicle / abs(self.vxVehicle))
         self.vVehicle = np.sqrt(self.vxVehicle**2 + self.vyVehicle**2)
         # print('vy:',self.vyVehicle,'nYaw:', self.nYaw, 'aSlipF:', self.aSlipF, 'aSlipR:', self.aSlipR)
 
+
+
+    # ##################
+    # VEHICLE POSITION #
+    # ##################
+    def update_position(self):
+        """
+            Update the vehicle position in the world
+        """
+
+        # update heading
+        self.daYaw = self.nYaw * self.tTask
+        self.aYaw += self.daYaw
+
+        # update position
+        sVehicleMoved = self.vVehicle * self.tTask
+        self.dxVehicle = sVehicleMoved * np.cos(self.aYaw + self.aBodySlip)
+        self.dyVehicle = sVehicleMoved * np.sin(self.aYaw + self.aBodySlip)
+        self.posVehicle[0] += self.dxVehicle  # xVehicle
+        self.posVehicle[1] += self.dyVehicle  # yVehicle
+
+        # update heading vector
+        self.h.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
+        self.h.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+
+        # update any vehicle child objects
+        # collision objects
+        for l in self.colliders:
+            # translate the line based on vehicle movement
+            l.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
+            # rotate the line based on change in vehicle yaw
+            l.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+        self.collisionCircle.update_centre_by_delta(self.dxVehicle, self.dyVehicle)
+        # lidars
+        self.lidar_front.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
+        self.lidar_left.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
+        self.lidar_right.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
+        self.lidar_front.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+        self.lidar_left.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+        self.lidar_right.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+
+    def apply_manual_translation(self, dX: float, dY):
+        """
+            Apply a manual translation to all vehicle objects - mainly used for collisions
+        """
+        # vehicle position
+        self.posVehicle[0] += dX
+        self.posVehicle[1] += dY
+
+        # vehicle heading vector
+        self.h.translate_line_by_delta(dX, dY)
+
+        # vehicle collision objects
+        for l in self.colliders:
+            l.translate_line_by_delta(dX, dY)
+        self.collisionCircle.update_centre_by_delta(dX, dY)
+
+        # lidars
+        self.lidar_front.translate_lidars_by_delta(dX, dY)
+        self.lidar_left.translate_lidars_by_delta(dX, dY)
+        self.lidar_right.translate_lidars_by_delta(dX, dY)
+
+    def apply_manual_rotation(self, daRot: float):
+        """
+            Apply a manual rotation to all vehicle objects - mainly used for collisions
+        """
+        # vehicle yaw
+        self.aYaw += daRot
+
+        # vehicle heading vector
+        self.h.rotate_line_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+
+        # vehicle collision objects
+        for l in self.colliders:
+            l.rotate_line_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+
+        # lidars
+        self.lidar_front.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+        self.lidar_left.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+        self.lidar_right.rotate_lidar_by_delta(daRot, self.posVehicle[0], self.posVehicle[1])
+
+
+    # ############################
+    # VEHICLE SENSOR INFORMATION #
+    # ############################
     def get_vehicle_sensors(self):
         """
             Returns the vehicle sensors for visualisation and sending throug udp to driver
@@ -506,44 +556,39 @@ class Vehicle(object):
                 'xVehicle': self.posVehicle[0], 'yVehicle': self.posVehicle[1],
                 'aLidarRotL': self.aLidarRotL, 'aLidarRotR': self.aLidarRotR, 'aLidarRotFront': self.aLidarRotFront}
 
-    def update_position(self):
+    # ##################
+    # VEHICLE PROGRESS #
+    # ##################
+    def update_vehicle_progress(self):
         """
-            Update the vehicle position in the world
+            Update the vehicles progress around the lap, both in terms of time and distance
         """
-        if self.tLastPosUpdate is None:
-            self.tLastPosUpdate = time.time()
+        # update the current lap time
+        self.tLapLive += self.tTask
+
+        # determine if a new lap has started
+        bNewLap, self.bCarNearStartLine = self.track.check_new_lap(self.posVehicle[0], self.posVehicle[1], self.bCarNearStartLine)
+        # new lap has been detected
+        if bNewLap:
+            if self.NLapsComplete == -1:
+                # this is the first lap
+                self.NLapsComplete += 1
+                print('First Lap started')
+            else:
+                # standard new lap - set the time and roll over laps complete
+                self.NLapsComplete += 1
+                print('New Lap')
+                self.tLap.append(self.tLapLive + self.tLapPen)
+                print('Lap time: {:.2f} s'.format(self.tLap[-1]))
+                print('Penalties: {:.2f} s'.format(self.tLapPen))
+                self.tLapPen = 0.0
+                self.tLapLive = 0.0
+
+        # calculate the cars positional progress around the lap
+        rLapProgress, self.NLapIdx = self.track.get_veh_pos_progress(self.NLapIdx, self.posVehicle[0], self.posVehicle[1])
+        if -0.1 < rLapProgress - self.rLapProgress < 0:
+            self.bMovingBackwards = True
         else:
-            tNow = time.time()
-            tElapsed = tNow - self.tLastPosUpdate
-            self.tLastPosUpdate = tNow
+            self.bMovingBackwards = False
 
-            # update heading
-            self.daYaw = self.nYaw * tElapsed
-            self.aYaw += self.daYaw
-
-            # update position
-            sVehicleMoved = self.vVehicle * tElapsed
-            self.dxVehicle = sVehicleMoved * np.cos(self.aYaw + self.aBodySlip)
-            self.dyVehicle = sVehicleMoved * np.sin(self.aYaw + self.aBodySlip)
-            self.posVehicle[0] += self.dxVehicle  # xVehicle
-            self.posVehicle[1] += self.dyVehicle  # yVehicle
-
-            # update heading vector
-            self.h.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
-            self.h.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
-
-            # update any vehicle child objects
-            # collision objects
-            for l in self.colliders:
-                # translate the line based on vehicle movement
-                l.translate_line_by_delta(self.dxVehicle, self.dyVehicle)
-                # rotate the line based on change in vehicle yaw
-                l.rotate_line_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
-            self.collisionCircle.update_centre_by_delta(self.dxVehicle, self.dyVehicle)
-            # lidars
-            self.lidar_front.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
-            self.lidar_left.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
-            self.lidar_right.translate_lidars_by_delta(self.dxVehicle, self.dyVehicle)
-            self.lidar_front.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
-            self.lidar_left.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
-            self.lidar_right.rotate_lidar_by_delta(self.daYaw, self.posVehicle[0], self.posVehicle[1])
+        self.rLapProgress = rLapProgress
