@@ -51,6 +51,17 @@ class Vehicle(object):
         # create lidar object
         self.lidars = None
 
+        # initialise vehicle progress variables
+        self.bNewLap = False
+        self.bCarNearStartLine = False
+        self.tLap = []
+        self.tLapPen = 0.0
+        self.tLapLive = 0.0
+        self.NLapsComplete = -1
+        self.rLapProgress = 0.0
+        self.NLapIdx = 0
+        self.bMovingBackwards = False
+
     # ####################
     # INITIAL CONDITIONS #
     # ####################
@@ -103,7 +114,7 @@ class Vehicle(object):
     # #################
     def update(self, rThrottlePedalDemand: float, rBrakePedalDemand: float, aSteeringWheelDemand: float, aRotFront: float=0, aRotL: float=0, aRotR: float=0, task_rate=None):
         """
-            Run through the standard set of update functions for a single time step - user can manually set the task rate for manual driving
+            Run through the standard set of update functions for a single time step - user can manually set the task rate for manual driving at wall time
         """
         if task_rate is not None:
             self.tTask = task_rate
@@ -113,6 +124,7 @@ class Vehicle(object):
         self.update_position()
         self.check_for_vehicle_collision()
         self.update_lidars(aRotFront, aRotL, aRotR)
+        self.update_vehicle_progress()
 
     # ########
     # LIDARS #
@@ -272,17 +284,20 @@ class Vehicle(object):
                     aCollision = np.arctan2(lc.y2 - lc.y1, lc.x2 - lc.x1) - self.aYaw
                     break
 
-        if self.bHasCollided and self.bAutoReset:
-            # move the car back by 2 * dposVehicle to give the driver a chance to recover
-            self.apply_manual_translation(-2 * self.dxVehicle, -2 * self.dyVehicle)
-            # realign the car so it's paralled with the track segment
-            self.apply_manual_rotation(aCollision)
 
-            # reset the vehicle states
-            self.reset_states()
-
+        if self.bHasCollided:
             # add a lap time penalty in the track
-            self.track.add_lap_time_penalty(10.0)
+            self.tLapPen += 10.0
+            if  self.bAutoReset:
+                # move the car back by 2 * dposVehicle to give the driver a chance to recover
+                self.apply_manual_translation(-2 * self.dxVehicle, -2 * self.dyVehicle)
+                # realign the car so it's paralled with the track segment
+                self.apply_manual_rotation(aCollision)
+
+                # reset the vehicle states
+                self.reset_states()
+
+
 
     def get_collision_state(self, l1, l2):
         """
@@ -540,3 +555,43 @@ class Vehicle(object):
                 'aSteeringWheel': self.aSteeringWheel, 'nYaw': self.nYaw,
                 'xVehicle': self.posVehicle[0], 'yVehicle': self.posVehicle[1],
                 'aLidarRotL': self.aLidarRotL, 'aLidarRotR': self.aLidarRotR, 'aLidarRotFront': self.aLidarRotFront}
+
+    # ##################
+    # VEHICLE PROGRESS #
+    # ##################
+    def update_vehicle_progress(self):
+        """
+            Update the vehicles progress around the lap, both in terms of time and distance
+        """
+        # update the current lap time
+        self.tLapLive += self.tTask
+
+        # determine if a new lap has started
+        bNewLap, self.bCarNearStartLine = self.track.check_new_lap(self.posVehicle[0], self.posVehicle[1], self.bCarNearStartLine)
+        # new lap has been detected
+        if bNewLap:
+            if self.NLapsComplete == -1:
+                # this is the first lap
+                self.NLapsComplete += 1
+                print('First Lap started')
+            else:
+                # standard new lap - set the time and roll over laps complete
+                self.NLapsComplete += 1
+                print('New Lap')
+                self.tLap.append(self.tLapLive + self.tLapPen)
+                print('Lap time: {:.2f} s'.format(self.tLap[-1]))
+                print('Penalties: {:.2f} s'.format(self.tLapPen))
+                self.tLapPen = 0.0
+                self.tLapLive = 0.0
+
+        # calculate the cars positional progress around the lap
+        rLapProgress, self.NLapIdx = self.track.get_veh_pos_progress(self.NLapIdx, self.posVehicle[0], self.posVehicle[1])
+        if -0.1 < rLapProgress - self.rLapProgress < 0:
+            self.bMovingBackwards = True
+        else:
+            self.bMovingBackwards = False
+
+        if rLapProgress < self.rLapProgress:
+            print(self.rLapProgress, self.NLapIdx, self.bMovingBackwards, bNewLap)
+
+        self.rLapProgress = rLapProgress
