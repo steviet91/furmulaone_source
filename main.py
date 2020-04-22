@@ -11,7 +11,7 @@ def main():
     # instantiate the objects
     drv_in = DriverInputsRecv()
     veh_out = VehicleOutputsSend()
-    track = TrackHandler('nardo')
+    track = TrackHandler('dodec_track')
     veh = Vehicle(1, track, 60, 60 ,60)
     vis = Vis(track, veh)
     run_game = True
@@ -58,9 +58,6 @@ def main():
         vis.draw_demands()
         vis.render_image()
         vis.update_camera_position()
-
-        # check the lap data
-        track.check_new_lap(veh.posVehicle[0], veh.posVehicle[1])
 
         # send the vehicle output dat aacross the network
         veh_out.set_vehicle_sensors(veh.get_vehicle_sensors())
