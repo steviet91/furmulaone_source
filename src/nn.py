@@ -1,5 +1,5 @@
 import numpy as np
-
+import os
 
 class NeuralNetwork(object):
     """
@@ -11,7 +11,7 @@ class NeuralNetwork(object):
         """
             Initialise the object
         """
-
+        self.module_path = os.path.dirname(os.path.abspath(__file__))
         # instantiate input layer
         self.inputs = np.zeros(input_len, dtype=np.float64)
         if len(hidden_layer_lens) > 0:
@@ -27,7 +27,7 @@ class NeuralNetwork(object):
             self.h_layers_b = []
             for i,h in enumerate(hidden_layer_lens):
                 self.h_layers.append(np.zeros(h))
-                self.h_layers_b.append(np.ones(h))
+                self.h_layers_b.append(np.zeros(h))
                 if i == (len(hidden_layer_lens)-1):
                     # last layer, hook up onto outputs
                     self.h_layers_w.append(np.zeros((h, output_len)))
@@ -42,7 +42,7 @@ class NeuralNetwork(object):
 
         # instantiate outputs
         self.outputs = np.zeros(output_len)
-        self.outputs_b = np.ones(output_len)
+        self.outputs_b = np.zeros(output_len)
 
         self.init_type = 'RANDO'
 
@@ -70,3 +70,11 @@ class NeuralNetwork(object):
             Sigmoid activation function
         """
         return 1 / (1 + np.exp(-x))
+
+    def pickle_nn(self):
+        """
+            Save the NN as a binary by pickling it
+        """
+        import pickle
+        from datetime import datetime
+        pickle.dump(self, open(self.module_path + '/../data/nn/' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.nn', 'wb'))

@@ -37,7 +37,7 @@ class TrackHandler(object):
         d2 = np.sqrt((self.data.startLine.x2 - xC)**2 + (self.data.startLine.y2 - yC)**2)
 
         # check the distance compared to the length of the start line + a tolerance
-        if (d1 + d2) < (self.data.startLine.v_mag + self.data.startLine.v_mag * 0.001):
+        if (d1 + d2) < (self.data.startLine.v_mag + self.data.startLine.v_mag * 0.1):
             # we're new the start line
             bCarNearStartLine = True
             bNewLap = False
