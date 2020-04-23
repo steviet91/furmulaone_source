@@ -10,10 +10,11 @@ import time
 
 class Vis(object):
 
-    def __init__(self, track: TrackHandler, vehicle: Vehicle):
+    def __init__(self, track: TrackHandler, vehicle: Vehicle, use_camera_spring=True):
         # save the arguements
         self.track = track
         self.vehicle = vehicle
+        self.use_camera_spring = use_camera_spring
 
         # Load settings in the config.json
         self.load_config()
@@ -144,7 +145,12 @@ class Vis(object):
                 self.cameraPosRaw[1] += self.vyCamera * tElapsed
 
             self.update_camera_scale()
-            self.cameraPos = self.cameraPosRaw / self.img_scale
+
+            if self.use_camera_spring:
+                self.cameraPos = self.cameraPosRaw / self.img_scale
+            else:
+                # Hack to get visualisation working for rl agent
+                self.cameraPos = self.vehicle.posVehicle / self.img_scale
 
     def draw_data(self):
         """
