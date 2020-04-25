@@ -52,12 +52,7 @@ def main():
         t = time.time()
 
         # draw the visualisation
-        vis.draw_car()
-        vis.draw_track()
-        vis.draw_all_lidars()
-        vis.draw_demands()
-        vis.render_image()
-        vis.update_camera_position()
+        vis.draw()
 
         # send the vehicle output dat aacross the network
         veh_out.set_vehicle_sensors(veh.get_vehicle_sensors())

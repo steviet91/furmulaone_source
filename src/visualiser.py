@@ -63,6 +63,15 @@ class Vis(object):
         self.vyCamera = 0.0
         self.vCamera = 0.0
 
+    def draw(self):
+        """ Draw all the components of the visualisation """
+        self.draw_car()
+        self.draw_track()
+        self.draw_all_lidars()
+        self.draw_demands()
+        self.render_image()
+        self.update_camera_position()
+
     def draw_car(self):
 
         # create a copy of the base image
