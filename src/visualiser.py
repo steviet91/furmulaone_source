@@ -69,6 +69,7 @@ class Vis(object):
         self.draw_track()
         self.draw_all_lidars()
         self.draw_demands()
+        self.draw_laptime()
         self.render_image()
         self.update_camera_position()
 
@@ -250,6 +251,21 @@ class Vis(object):
         p0 = np.array([lidar.collisionCircle.x0, lidar.collisionCircle.y0]) / self.img_scale + self.cameraPosOrigin - self.cameraPos
         cv.circle(self.show_img, tuple(p0.astype(np.int32)), int(lidar.collisionCircle.r / self.img_scale), (255, 0, 0))
 
+    def draw_laptime(self):
+        """ Draws the current laptime on the screen """
+        laptime = self.vehicle.tLapLive
+        lap_mins = laptime // 60
+        lap_secs = laptime % 60
+        # Format the times into MM:SS.s
+        lap_string = "Laptime: {:02n}:{:02.2f}".format(lap_mins,lap_secs)
+        # Use standard HUD fonts, etc. to keep the look consistent
+        font = getattr(cv,self.config['hud']['font'])
+        text_size = cv.getTextSize(lap_string, font, self.config['hud']['font_scale'], 2)[0]
+        # Get positions
+        tLap_x = self.img_w - int(text_size[0]) - self.config['hud']['padding']
+        tLap_y = self.img_h - self.config['hud']['padding']
+        # Draw the text!
+        cv.putText(self.show_img, lap_string, (tLap_x, tLap_y), font, self.config['hud']['font_scale'], self.colours['hud']['outline'],)
 
     def draw_track(self):
         """
