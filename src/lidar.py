@@ -25,7 +25,7 @@ class Lidar(object):
         self.aFov = aFov  # the field of view of the lidar
 
         # set the properties of the lidar
-        self.NRays = 20  # the number of rays in the lidar
+        self.NRays = 3  # the number of rays in the lidar
         self.xLidarRange = float(200)  # range in meters
 
         # initialise the lidar rays
