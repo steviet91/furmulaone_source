@@ -40,7 +40,7 @@ class GamePad(object):
                             self.reset_requested = True
                         if event.code == "ABS_X":
                             self.aSteeringWheelDemand = max(-360, min(360, event.state / 12000 * 360))  # assume 12000 is max
-                            # print('aSteeringWheelDemand: ', event.state,self.aSteeringWheelDemand)
+                            #print('aSteeringWheelDemand: ', event.state,self.aSteeringWheelDemand)
                         if event.code == "ABS_Z":
                             self.rBrakeDemand = min(1, event.state / 255)  # max is 255
                             # print('rBrakeDemand: ', event.state,self.rBrakeDemand)

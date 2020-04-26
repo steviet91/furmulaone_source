@@ -577,7 +577,7 @@ class Vehicle(object):
                 # standard new lap - set the time and roll over laps complete
                 self.NLapsComplete += 1
                 self.tLap.append(self.tLapLive + self.tLapPen)
-                print('Lap time: {:.2f} s'.format(self.tLap[-1]) + ' Penalties: {:.2f} s'.format(self.tLapPen))
+                print('Car {}'.format(self.id) + 'completed lap {}'.format(self.NLapsComplete) + ' - Lap time: {:.2f} s'.format(self.tLap[-1]) + ' Penalties: {:.2f} s'.format(self.tLapPen))
                 self.tLapPen = 0.0
                 self.tLapLive = 0.0
 

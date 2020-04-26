@@ -7,7 +7,7 @@ class NeuralNetwork(object):
     """
 
 
-    def __init__(self, input_len, output_len, hidden_layer_lens):
+    def __init__(self, input_len, output_len, hidden_layer_lens, dtype=np.float64):
         """
             Initialise the object
         """
@@ -15,10 +15,10 @@ class NeuralNetwork(object):
         # instantiate input layer
         self.inputs = np.zeros(input_len, dtype=np.float64)
         if len(hidden_layer_lens) > 0:
-            self.inputs_w = np.zeros((input_len, hidden_layer_lens[0]))
+            self.inputs_w = np.zeros((input_len, hidden_layer_lens[0]), dtype=dtype)
         else:
             # no hidden layers
-            self.inputs_w = np.zeros((input_len, output_len))
+            self.inputs_w = np.zeros((input_len, output_len), dtype=dtype)
 
         # instantiate hidden layers
         if len(hidden_layer_lens) > 0:
@@ -27,13 +27,13 @@ class NeuralNetwork(object):
             self.h_layers_b = []
             for i,h in enumerate(hidden_layer_lens):
                 self.h_layers.append(np.zeros(h))
-                self.h_layers_b.append(np.zeros(h))
+                self.h_layers_b.append(np.zeros(h, dtype=dtype))
                 if i == (len(hidden_layer_lens)-1):
                     # last layer, hook up onto outputs
-                    self.h_layers_w.append(np.zeros((h, output_len)))
+                    self.h_layers_w.append(np.zeros((h, output_len), dtype=dtype))
                 else:
                     # hook up to the next layer
-                    self.h_layers_w.append(np.zeros((h, hidden_layer_lens[i+1])))
+                    self.h_layers_w.append(np.zeros((h, hidden_layer_lens[i+1]), dtype=dtype))
         else:
             # No hidden layers
             self.h_layers = None
@@ -42,7 +42,7 @@ class NeuralNetwork(object):
 
         # instantiate outputs
         self.outputs = np.zeros(output_len)
-        self.outputs_b = np.zeros(output_len)
+        self.outputs_b = np.zeros(output_len, dtype=dtype)
 
         self.init_type = 'RANDO'
 
@@ -71,10 +71,20 @@ class NeuralNetwork(object):
         """
         return 1 / (1 + np.exp(-x))
 
-    def pickle_nn(self):
+    def pickle_nn(self, suffix=None):
         """
             Save the NN as a binary by pickling it
         """
         import pickle
         from datetime import datetime
-        pickle.dump(self, open(self.module_path + '/../data/nn/' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.nn', 'wb'))
+        f_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if suffix is not None:
+            f_name += '_' + suffix
+        pickle.dump(self, open(self.module_path + '/../data/nn/' + f_name + '.nn', 'wb'))
+
+    @classmethod
+    def loader(cls, nn_name):
+        import pickle
+        # load the nn
+        module_path = os.path.dirname(os.path.abspath(__file__))
+        return pickle.load(open(module_path + '/../data/nn/' + nn_name + '.nn', 'rb'))

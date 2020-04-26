@@ -52,6 +52,7 @@ def main():
         t = time.time()
 
         # draw the visualisation
+        vis.reset_image()
         vis.draw_car()
         vis.draw_track()
         vis.draw_all_lidars()
@@ -65,7 +66,7 @@ def main():
                                 veh.lidar_left.collision_array,
                                 veh.lidar_right.collision_array)
         veh_out.send_data()
-        sleep(0.001)
+        sleep(0.01)
 
 
 
