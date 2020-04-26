@@ -2,6 +2,7 @@ import json
 import os
 import numpy as np
 import time
+from copy import deepcopy
 from .track import Track
 from .geom import Circle
 from .geom import Line
@@ -96,6 +97,7 @@ class Vehicle(object):
         self.ndotYaw = 0.0
         self.dxVehicle = 0.0
         self.dyVehicle = 0.0
+        self.NLapsComplete = -1
         self.bHasCollided = False
 
     def reset_vehicle_position(self):
@@ -116,6 +118,7 @@ class Vehicle(object):
         """
             Run through the standard set of update functions for a single time step - user can manually set the task rate for manual driving at wall time
         """
+        old_position = deepcopy(self.posVehicle)
         if task_rate is not None:
             self.tTask = task_rate
         self.set_driver_inputs(rThrottlePedalDemand, rBrakePedalDemand, aSteeringWheelDemand)
@@ -124,7 +127,7 @@ class Vehicle(object):
         self.update_position()
         self.check_for_vehicle_collision()
         self.update_lidars(aRotFront, aRotL, aRotR)
-        self.update_vehicle_progress()
+        self.update_vehicle_progress(old_position)
 
     # ########
     # LIDARS #
@@ -559,7 +562,7 @@ class Vehicle(object):
     # ##################
     # VEHICLE PROGRESS #
     # ##################
-    def update_vehicle_progress(self):
+    def update_vehicle_progress(self, old_position):
         """
             Update the vehicles progress around the lap, both in terms of time and distance
         """
@@ -567,22 +570,23 @@ class Vehicle(object):
         self.tLapLive += self.tTask
 
         # determine if a new lap has started
-        bNewLap, self.bCarNearStartLine = self.track.check_new_lap(self.posVehicle[0], self.posVehicle[1], self.bCarNearStartLine)
+        bNewLap = self.track.check_new_lap(self.posVehicle, old_position)
         # new lap has been detected
         if bNewLap:
-            if self.NLapsComplete == -1:
+            # Increment the counter
+            self.NLapsComplete += 1
+            if self.NLapsComplete == 0:
                 # this is the first lap
-                self.NLapsComplete += 1
                 print('First Lap started')
             else:
                 # standard new lap - set the time and roll over laps complete
-                self.NLapsComplete += 1
                 print('New Lap')
                 self.tLap.append(self.tLapLive + self.tLapPen)
                 print('Lap time: {:.2f} s'.format(self.tLap[-1]))
                 print('Penalties: {:.2f} s'.format(self.tLapPen))
-                self.tLapPen = 0.0
-                self.tLapLive = 0.0
+            # Reset laptime and lap penalties if line crossed
+            self.tLapPen = 0.0
+            self.tLapLive = 0.0
 
         # calculate the cars positional progress around the lap
         rLapProgress, self.NLapIdx = self.track.get_veh_pos_progress(self.NLapIdx, self.posVehicle[0], self.posVehicle[1])

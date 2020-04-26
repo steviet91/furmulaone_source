@@ -3,7 +3,7 @@ from .geom import Line
 from .geom import rotate_point
 from .geom import Circle
 from .geom import calc_euclid_distance_2d_sq
-from .geom import check_for_intersection_lineseg_circle
+from .geom import check_for_intersection_lineseg_circle, check_for_intersection_lineseg_lineseg
 from .geom import calc_angle_between_unit_vectors
 import time
 import os
@@ -27,29 +27,12 @@ class TrackHandler(object):
     # ##################
     # VEHICLE PROGRESS #
     # ##################
-    def check_new_lap(self, xC: float, yC: float, bCarNearStartLine: bool):
-        """
-            Check for a new lap by looking for a rising edge on the distance of the car to
-            the start line vertices. This logic should also work for the first lap.
-        """
-        # calculate the distance between the car and each vertex
-        d1 = np.sqrt((self.data.startLine.x1 - xC)**2 + (self.data.startLine.y1 - yC)**2)
-        d2 = np.sqrt((self.data.startLine.x2 - xC)**2 + (self.data.startLine.y2 - yC)**2)
-
-        # check the distance compared to the length of the start line + a tolerance
-        if (d1 + d2) < (self.data.startLine.v_mag + self.data.startLine.v_mag * 0.001):
-            # we're new the start line
-            bCarNearStartLine = True
-            bNewLap = False
-        else:
-            if bCarNearStartLine:
-                # this is a falling edge, and therefore a new lap has begun
-                bNewLap = True
-                bCarNearStartLine = False
-            else:
-                bNewLap = False
-
-        return bNewLap, bCarNearStartLine
+    def check_new_lap(self, current_car_position: tuple, old_car_position: tuple):
+        """ Checks for vehicle crossing start line by checing if the line from previous position to current position intersects start line """
+        # Vector of where the car travelled from and to in the last timestep
+        s = Line(old_car_position, current_car_position)
+        new_lap, _ = check_for_intersection_lineseg_lineseg(s,self.data.startLine)
+        return new_lap
 
     def get_veh_pos_progress(self, NLapIdx: int, xC: float, yC: float):
         """
