@@ -7,12 +7,14 @@ from .geom import calc_euclid_distance_2d
 from .lidar import Lidar
 import time
 
+
 class Vis(object):
 
-    def __init__(self, track: TrackHandler, vehicle: Vehicle):
+    def __init__(self, track: TrackHandler, vehicle: Vehicle, use_camera_spring=True):
         # save the arguements
         self.track = track
         self.vehicle = vehicle
+        self.use_camera_spring = use_camera_spring
 
         # Load settings in the config.json
         self.load_config()
@@ -39,7 +41,7 @@ class Vis(object):
         self.tLastCamUpdate = None
         self.carPos = np.array([0, 0]) + self.cameraPosOrigin
         # set the camera position equal to the vehicle (scaled properly)
-        self.cameraPosRaw = np.copy(self.vehicle.posVehicle)
+        self.cameraPosRaw = self.vehicle.posVehicle
         self.update_camera_scale()
         self.cameraPos = self.vehicle.posVehicle / self.img_scale
         self.reset_camera()
@@ -61,17 +63,21 @@ class Vis(object):
         self.vyCamera = 0.0
         self.vCamera = 0.0
 
-    def set_vehicle(self, veh):
-        """
-            Set the vehicle object
-        """
-        self.vehicle = veh
+    def draw(self):
+        """ Draw all the components of the visualisation """
+        self.draw_car()
+        self.draw_track()
+        self.draw_all_lidars()
+        self.draw_demands()
+        self.draw_laptime()
+        self.render_image()
+        self.update_camera_position()
 
-    def reset_image(self):
+    def draw_car(self):
+
         # create a copy of the base image
         self.show_img = np.copy(self.orig_img)
 
-    def draw_car(self):
         # translate the visual based on the new position
         self.carPos = self.vehicle.posVehicle / self.img_scale + self.cameraPosOrigin - self.cameraPos
 
@@ -98,62 +104,63 @@ class Vis(object):
         """
             Mass spring damper system to move the carmera in order to track the vehicles movement
         """
-        if self.config['camera']['use_spring']:
-            # determine the elapsed time
-            if self.tLastCamUpdate is None:
-                self.tLastCamUpdate = time.time()
-                bElapsedTimeAvailable = False  # no elapsed time yet
-            else:
-                tNow = time.time()
-                tElapsed = tNow - self.tLastCamUpdate
-                self.tLastCamUpdate = tNow
-                bElapsedTimeAvailable = True
-
-            # mass, spring, damper method
-            # Force acting on the camera
-            if self.vehicle.bHasCollided:
-                self.reset_camera()
-            else:
-
-                # calculate the spring length
-                xCameraVehicle = calc_euclid_distance_2d(tuple(self.vehicle.posVehicle), tuple(self.cameraPosRaw))
-
-                # calcuate the velocity delta between the car and camera
-                if bElapsedTimeAvailable:
-                    if tElapsed != 0.0:
-                        xdotCameraVehicle = (xCameraVehicle - self.xCameraVehicle) / tElapsed
-                    else:
-                        # div by zero protection
-                        xdotCameraVehicle = 0.0
-                    self.xCameraVehicle = xCameraVehicle
-                else:
-                    xdotCameraVehicle = 0.0
-
-                # calculate the resultant force on the camera
-                FCamera = max(self.kCameraSpring * xCameraVehicle + xdotCameraVehicle * self.cCameraDamper - self.mu_camera * self.mCamera * 9.81, 0.0)
-
-                # calculate the angle between the camera and vehicle
-                aCamVeh = np.arctan2(self.vehicle.posVehicle[1] - self.cameraPosRaw[1], self.vehicle.posVehicle[0] - self.cameraPosRaw[0])
-                # calculate the component forces
-                FxCamera = FCamera * np.cos(aCamVeh)
-                FyCamera = FCamera * np.sin(aCamVeh)
-                # calculate the accelerations
-                gxCamera = FxCamera / self.mCamera
-                gyCamera = FyCamera / self.mCamera
-
-                # integrate the accelerations
-                if bElapsedTimeAvailable:
-                    self.vxCamera += gxCamera * tElapsed
-                    self.vyCamera += gyCamera * tElapsed
-                    self.vCamera = np.sqrt(self.vxCamera**2 + self.vyCamera**2)
-                    self.cameraPosRaw[0] += self.vxCamera * tElapsed
-                    self.cameraPosRaw[1] += self.vyCamera * tElapsed
+        # determine the elapsed time
+        if self.tLastCamUpdate is None:
+            self.tLastCamUpdate = time.time()
+            bElapsedTimeAvailable = False  # no elapsed time yet
         else:
-            self.cameraPosRaw = np.copy(self.vehicle.posVehicle)
+            tNow = time.time()
+            tElapsed = tNow - self.tLastCamUpdate
+            self.tLastCamUpdate = tNow
+            bElapsedTimeAvailable = True
 
-        self.update_camera_scale()
-        self.cameraPos = self.cameraPosRaw / self.img_scale
+        # mass, spring, damper method
+        # Force acting on the camera
+        if self.vehicle.bHasCollided:
+            self.reset_camera()
+        else:
 
+            # calculate the spring length
+            xCameraVehicle = calc_euclid_distance_2d(tuple(self.vehicle.posVehicle), tuple(self.cameraPosRaw))
+
+            # calcuate the velocity delta between the car and camera
+            if bElapsedTimeAvailable:
+                if tElapsed != 0.0:
+                    xdotCameraVehicle = (xCameraVehicle - self.xCameraVehicle) / tElapsed
+                else:
+                    # div by zero protection
+                    xdotCameraVehicle = 0.0
+                self.xCameraVehicle = xCameraVehicle
+            else:
+                xdotCameraVehicle = 0.0
+
+            # calculate the resultant force on the camera
+            FCamera = max(self.kCameraSpring * xCameraVehicle + xdotCameraVehicle * self.cCameraDamper - self.mu_camera * self.mCamera * 9.81, 0.0)
+
+            # calculate the angle between the camera and vehicle
+            aCamVeh = np.arctan2(self.vehicle.posVehicle[1] - self.cameraPosRaw[1], self.vehicle.posVehicle[0] - self.cameraPosRaw[0])
+            # calculate the component forces
+            FxCamera = FCamera * np.cos(aCamVeh)
+            FyCamera = FCamera * np.sin(aCamVeh)
+            # calculate the accelerations
+            gxCamera = FxCamera / self.mCamera
+            gyCamera = FyCamera / self.mCamera
+
+            # integrate the accelerations
+            if bElapsedTimeAvailable:
+                self.vxCamera += gxCamera * tElapsed
+                self.vyCamera += gyCamera * tElapsed
+                self.vCamera = np.sqrt(self.vxCamera**2 + self.vyCamera**2)
+                self.cameraPosRaw[0] += self.vxCamera * tElapsed
+                self.cameraPosRaw[1] += self.vyCamera * tElapsed
+
+            self.update_camera_scale()
+
+            if self.use_camera_spring:
+                self.cameraPos = self.cameraPosRaw / self.img_scale
+            else:
+                # Hack to get visualisation working for rl agent
+                self.cameraPos = self.vehicle.posVehicle / self.img_scale
 
     def draw_data(self):
         """
@@ -244,6 +251,21 @@ class Vis(object):
         p0 = np.array([lidar.collisionCircle.x0, lidar.collisionCircle.y0]) / self.img_scale + self.cameraPosOrigin - self.cameraPos
         cv.circle(self.show_img, tuple(p0.astype(np.int32)), int(lidar.collisionCircle.r / self.img_scale), (255, 0, 0))
 
+    def draw_laptime(self):
+        """ Draws the current laptime on the screen """
+        laptime = self.vehicle.tLapLive
+        lap_mins = laptime // 60
+        lap_secs = laptime % 60
+        # Format the times into MM:SS.s
+        lap_string = "Laptime: {:02n}:{:02.2f}".format(lap_mins,lap_secs)
+        # Use standard HUD fonts, etc. to keep the look consistent
+        font = getattr(cv,self.config['hud']['font'])
+        text_size = cv.getTextSize(lap_string, font, self.config['hud']['font_scale'], 2)[0]
+        # Get positions
+        tLap_x = self.img_w - int(text_size[0]) - self.config['hud']['padding']
+        tLap_y = self.img_h - self.config['hud']['padding']
+        # Draw the text!
+        cv.putText(self.show_img, lap_string, (tLap_x, tLap_y), font, self.config['hud']['font_scale'], self.colours['hud']['outline'],)
 
     def draw_track(self):
         """

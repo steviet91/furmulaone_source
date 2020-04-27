@@ -52,13 +52,7 @@ def main():
         t = time.time()
 
         # draw the visualisation
-        vis.reset_image()
-        vis.draw_car()
-        vis.draw_track()
-        vis.draw_all_lidars()
-        vis.draw_demands()
-        vis.render_image()
-        vis.update_camera_position()
+        vis.draw()
 
         # send the vehicle output dat aacross the network
         veh_out.set_vehicle_sensors(veh.get_vehicle_sensors())
@@ -66,7 +60,7 @@ def main():
                                 veh.lidar_left.collision_array,
                                 veh.lidar_right.collision_array)
         veh_out.send_data()
-        sleep(0.01)
+        sleep(0.001)
 
 
 
