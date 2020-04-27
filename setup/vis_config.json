@@ -6,6 +6,7 @@
         "y_buffer" : 100
     },
     "camera": {
+        "use_spring": false,
         "scale_LU" : [0.1, 0.15, 0.35],
         "scale_vCar_BRP": [0, 50, 100],
         "kCameraSpring" : 0.01,

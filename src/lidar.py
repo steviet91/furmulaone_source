@@ -12,6 +12,8 @@ class Lidar(object):
     """
         Object for the LIDAR containing the rays and intersect data
     """
+    _NRays = 3
+    _xLidarRange = float(200)
 
     def __init__(self, track: TrackHandler, a0: float, x0: float, y0: float, aFov: float):
         """
@@ -24,15 +26,11 @@ class Lidar(object):
         self.y0 = y0  # the y position of the lidar
         self.aFov = aFov  # the field of view of the lidar
 
-        # set the properties of the lidar
-        self.NRays = 3  # the number of rays in the lidar
-        self.xLidarRange = float(200)  # range in meters
-
         # initialise the lidar rays
         self.initialise_rays()
 
         # initialise the lidar collision circle
-        self.collisionCircle = Circle(self.x0, self.y0, self.xLidarRange)
+        self.collisionCircle = Circle(self.x0, self.y0, Lidar._xLidarRange)
 
         # intialise the collision array
         self.initialise_collision_array()
@@ -47,8 +45,8 @@ class Lidar(object):
             Set up the rays that represent the lidar
         """
         self.rays = []
-        for i in range(0,self.NRays):
-            a = self.a0 - self.aFov / 2 + i * self.aFov / (self.NRays - 1)  # angle of this ray
+        for i in range(0,Lidar._NRays):
+            a = self.a0 - self.aFov / 2 + i * self.aFov / (Lidar._NRays - 1)  # angle of this ray
             # going to work as a unit vector
             x = np.cos(a)
             y = np.sin(a)
@@ -60,7 +58,7 @@ class Lidar(object):
             Collision array contains the distance of the collision for each ray.
             A negative number (-1) infers no collision found
         """
-        self.collision_array = -1.0 * np.ones(self.NRays, dtype=np.float64)
+        self.collision_array = -1.0 * np.ones(Lidar._NRays, dtype=np.float64)
 
     def rotate_lidar_by_delta(self, daRot: float, cX: float, cY: float):
         """
@@ -129,7 +127,7 @@ class Lidar(object):
             return float(-1)
         else:
             d = float(calc_euclid_distance_2d(tuple(r.p1), tuple(pInt)))
-            if d <= self.xLidarRange:
+            if d <= Lidar._xLidarRange:
                 return d
             else:
                 # collisiion is out of range
