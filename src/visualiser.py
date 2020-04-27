@@ -41,7 +41,7 @@ class Vis(object):
         self.tLastCamUpdate = None
         self.carPos = np.array([0, 0]) + self.cameraPosOrigin
         # set the camera position equal to the vehicle (scaled properly)
-        self.cameraPosRaw = self.vehicle.posVehicle
+        self.cameraPosRaw = np.copy(self.vehicle.posVehicle)
         self.update_camera_scale()
         self.cameraPos = self.vehicle.posVehicle / self.img_scale
         self.reset_camera()
@@ -65,6 +65,7 @@ class Vis(object):
 
     def draw(self):
         """ Draw all the components of the visualisation """
+        self.reset_image()
         self.draw_car()
         self.draw_track()
         self.draw_all_lidars()
@@ -73,10 +74,20 @@ class Vis(object):
         self.render_image()
         self.update_camera_position()
 
-    def draw_car(self):
-
+    def reset_image(self):
+        """
+            Set the image back to the old version
+        """
         # create a copy of the base image
         self.show_img = np.copy(self.orig_img)
+
+    def set_car(self, veh):
+        """
+            Update the car object to the provided object
+        """
+        self.vehicle = veh
+
+    def draw_car(self):
 
         # translate the visual based on the new position
         self.carPos = self.vehicle.posVehicle / self.img_scale + self.cameraPosOrigin - self.cameraPos
@@ -104,63 +115,63 @@ class Vis(object):
         """
             Mass spring damper system to move the carmera in order to track the vehicles movement
         """
-        # determine the elapsed time
-        if self.tLastCamUpdate is None:
-            self.tLastCamUpdate = time.time()
-            bElapsedTimeAvailable = False  # no elapsed time yet
-        else:
-            tNow = time.time()
-            tElapsed = tNow - self.tLastCamUpdate
-            self.tLastCamUpdate = tNow
-            bElapsedTimeAvailable = True
+        if self.use_camera_spring:
+            # determine the elapsed time
+            if self.tLastCamUpdate is None:
+                self.tLastCamUpdate = time.time()
+                bElapsedTimeAvailable = False  # no elapsed time yet
+            else:
+                tNow = time.time()
+                tElapsed = tNow - self.tLastCamUpdate
+                self.tLastCamUpdate = tNow
+                bElapsedTimeAvailable = True
 
-        # mass, spring, damper method
-        # Force acting on the camera
-        if self.vehicle.bHasCollided:
-            self.reset_camera()
-        else:
+            # mass, spring, damper method
+            # Force acting on the camera
+            if self.vehicle.bHasCollided:
+                self.reset_camera()
+            else:
 
-            # calculate the spring length
-            xCameraVehicle = calc_euclid_distance_2d(tuple(self.vehicle.posVehicle), tuple(self.cameraPosRaw))
+                # calculate the spring length
+                xCameraVehicle = calc_euclid_distance_2d(tuple(self.vehicle.posVehicle), tuple(self.cameraPosRaw))
 
-            # calcuate the velocity delta between the car and camera
-            if bElapsedTimeAvailable:
-                if tElapsed != 0.0:
-                    xdotCameraVehicle = (xCameraVehicle - self.xCameraVehicle) / tElapsed
+                # calcuate the velocity delta between the car and camera
+                if bElapsedTimeAvailable:
+                    if tElapsed != 0.0:
+                        xdotCameraVehicle = (xCameraVehicle - self.xCameraVehicle) / tElapsed
+                    else:
+                        # div by zero protection
+                        xdotCameraVehicle = 0.0
+                    self.xCameraVehicle = xCameraVehicle
                 else:
-                    # div by zero protection
                     xdotCameraVehicle = 0.0
-                self.xCameraVehicle = xCameraVehicle
-            else:
-                xdotCameraVehicle = 0.0
 
-            # calculate the resultant force on the camera
-            FCamera = max(self.kCameraSpring * xCameraVehicle + xdotCameraVehicle * self.cCameraDamper - self.mu_camera * self.mCamera * 9.81, 0.0)
+                # calculate the resultant force on the camera
+                FCamera = max(self.kCameraSpring * xCameraVehicle + xdotCameraVehicle * self.cCameraDamper - self.mu_camera * self.mCamera * 9.81, 0.0)
 
-            # calculate the angle between the camera and vehicle
-            aCamVeh = np.arctan2(self.vehicle.posVehicle[1] - self.cameraPosRaw[1], self.vehicle.posVehicle[0] - self.cameraPosRaw[0])
-            # calculate the component forces
-            FxCamera = FCamera * np.cos(aCamVeh)
-            FyCamera = FCamera * np.sin(aCamVeh)
-            # calculate the accelerations
-            gxCamera = FxCamera / self.mCamera
-            gyCamera = FyCamera / self.mCamera
+                # calculate the angle between the camera and vehicle
+                aCamVeh = np.arctan2(self.vehicle.posVehicle[1] - self.cameraPosRaw[1], self.vehicle.posVehicle[0] - self.cameraPosRaw[0])
+                # calculate the component forces
+                FxCamera = FCamera * np.cos(aCamVeh)
+                FyCamera = FCamera * np.sin(aCamVeh)
+                # calculate the accelerations
+                gxCamera = FxCamera / self.mCamera
+                gyCamera = FyCamera / self.mCamera
 
-            # integrate the accelerations
-            if bElapsedTimeAvailable:
-                self.vxCamera += gxCamera * tElapsed
-                self.vyCamera += gyCamera * tElapsed
-                self.vCamera = np.sqrt(self.vxCamera**2 + self.vyCamera**2)
-                self.cameraPosRaw[0] += self.vxCamera * tElapsed
-                self.cameraPosRaw[1] += self.vyCamera * tElapsed
+                # integrate the accelerations
+                if bElapsedTimeAvailable:
+                    self.vxCamera += gxCamera * tElapsed
+                    self.vyCamera += gyCamera * tElapsed
+                    self.vCamera = np.sqrt(self.vxCamera**2 + self.vyCamera**2)
+                    self.cameraPosRaw[0] += self.vxCamera * tElapsed
+                    self.cameraPosRaw[1] += self.vyCamera * tElapsed
 
-            self.update_camera_scale()
+                self.update_camera_scale()
 
-            if self.use_camera_spring:
                 self.cameraPos = self.cameraPosRaw / self.img_scale
-            else:
-                # Hack to get visualisation working for rl agent
-                self.cameraPos = self.vehicle.posVehicle / self.img_scale
+        else:
+            # Hack to get visualisation working for rl agent
+            self.cameraPos = np.copy(self.vehicle.posVehicle) / self.img_scale
 
     def draw_data(self):
         """

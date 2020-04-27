@@ -46,7 +46,7 @@ def main():
     veh = Vehicle(1, track, 60, 60 ,60, task_rate=task_rate)
     nn_inputs = np.zeros(9)
     nn_outputs = np.zeros(3)
-    vis = Vis(track, veh)
+    vis = Vis(track, veh, use_camera_spring=True)
     run_game = True
 
 
