@@ -3,3 +3,5 @@ build
 dist
 *.spec
 .vscode
+/data/rl_logs/**
+!/data/rl_logs/.gitkeep

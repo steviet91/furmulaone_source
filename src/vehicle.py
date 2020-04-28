@@ -111,6 +111,9 @@ class Vehicle(object):
         self.initialise_vehicle_colliders()
         self.initialise_lidars(aRotL=self.aLidarRotL, aRotR=self.aLidarRotR, aRotFront=self.aLidarRotFront)
 
+        self.rLapProgress = 0.0
+        self.NLapIdx = 0
+
     # #################
     # STANDARD UPDATE #
     # #################
