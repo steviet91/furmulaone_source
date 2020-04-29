@@ -11,7 +11,7 @@ import os
 
 
 class TrackHandler(object):
-    def __init__(self, track_name: str):
+    def __init__(self, track_name: str, is_store: bool=False):
         # get the module path
         self.module_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,11 +19,13 @@ class TrackHandler(object):
         self.track_name = track_name
 
         # load the track data
-        self.data = Track.loader(track_name)
+        if is_store:
+            self.data = TrackStore.loader(track_name)
+            self.data.activate_track(0) # always load the first track as default
+        else:
+            self.data = Track.loader(track_name)
 
-        self.NLapIdxMax = len(self.data.cent_lines)-1
-        self.NProgessSearchPointsBack = min(2, self.NLapIdxMax) # Pos progress search points
-        self.NProgessSearchPointsForward = min(3, self.NLapIdxMax) # Pos progress search points
+        self.is_store = is_store
 
     # ##################
     # VEHICLE PROGRESS #
@@ -40,8 +42,10 @@ class TrackHandler(object):
             Feed back the closest inner track point and the percentage of the lap
             completed based on total number of points
         """
-        search_start_idx = NLapIdx - self.NProgessSearchPointsBack
-        search_end_idx = NLapIdx + self.NProgessSearchPointsForward
+        self.NLapIdxMax = len(self.data.cent_lines)-1
+
+        search_start_idx = NLapIdx - min(2, self.NLapIdxMax)
+        search_end_idx = NLapIdx + min(3, self.NLapIdxMax)
 
         # check for the lap start/end and get the list of indexes to check
         if search_start_idx < 0:
@@ -120,6 +124,7 @@ class Track(object):
         self.cent_lines = []
         self.startLine = None
         self.startPos = None
+        self.is_closed = True
 
     @classmethod
     def loader(cls, track_name):
@@ -141,6 +146,7 @@ class Track(object):
         from .geom import get_intersection_point_lineseg_lineseg
         # save the track name
         self.track_name = track_name
+        self.is_closed = is_closed
 
         # load the data from a csv
         in_raw_points = np.genfromtxt(self.module_path + '/../data/track/' + track_name + '_IN.csv', delimiter=',')
@@ -387,6 +393,7 @@ class TrackStore(Track):
         t.cent_lines = self.cent_lines
         t.startLine = self.startLine
         t.startPos = self.startPos
+        t.is_closed = self.is_closed
         self.store.append(t)
         self.num_tracks += 1
 
@@ -398,6 +405,7 @@ class TrackStore(Track):
         self.cent_lines = t.cent_lines
         self.startLine = t.startLine
         self.startPos = t.startPos
+        self.is_closed = t.is_closed
 
     def shuffle_tracks(self):
         import random
@@ -421,7 +429,8 @@ class TrackStore(Track):
 if __name__ == "__main__":
     from .track import Track
     t = Track()
-    t.load_from_csv('barcelona')
+    t.load_from_csv('octo_track')
+    """
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
     for i in t.in_lines:
@@ -434,5 +443,6 @@ if __name__ == "__main__":
     ax.plot([i.x1, i.x2],[i.y1,i.y2],'g')
     ax.plot(t.startPos[0],t.startPos[1],'go')
     plt.show()
+    """
     t.pickle_track()
     print('Track Length: ',len(t.cent_lines), 'm')

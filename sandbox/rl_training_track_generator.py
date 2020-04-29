@@ -69,7 +69,6 @@ def curvature_too_low(x: np.ndarray, y: np.ndarray):
     rad_curve = abs((1 + dydx**2)**(3 / 2) / dy2d2x)
 
     MAX_RADIUS_OF_CURVATURE = 6
-    print(min(rad_curve))
     if min(rad_curve) < MAX_RADIUS_OF_CURVATURE:
         # min radius of curvature too low, throw this track away
         return True

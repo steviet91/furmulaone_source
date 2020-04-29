@@ -11,9 +11,10 @@ def main():
     # instantiate the objects
     drv_in = DriverInputsRecv()
     veh_out = VehicleOutputsSend()
-    track = TrackHandler('dodec_track')
+    track = TrackHandler('rl_training_set', is_store=True)
+    track.data.activate_track(-1)
     veh = Vehicle(1, track, 60, 60 ,60)
-    vis = Vis(track, veh)
+    vis = Vis(track, veh, use_camera_spring=False)
     run_game = True
 
     aLidarFront = 0.0 # angle from their nominal

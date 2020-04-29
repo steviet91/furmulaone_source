@@ -58,7 +58,6 @@ class Vehicle(object):
         self.tLap = []
         self.tLapPen = 0.0
         self.tLapLive = 0.0
-        self.NLapsComplete = -1
         self.rLapProgress = 0.0
         self.NLapIdx = 0
         self.bMovingBackwards = False
@@ -97,7 +96,10 @@ class Vehicle(object):
         self.ndotYaw = 0.0
         self.dxVehicle = 0.0
         self.dyVehicle = 0.0
-        self.NLapsComplete = -1
+        if self.track.data.is_closed:
+            self.NLapsComplete = -1
+        else:
+            self.NLapsComplete = 0
         self.bHasCollided = False
 
     def reset_vehicle_position(self):
