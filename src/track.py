@@ -6,6 +6,7 @@ from .geom import calc_euclid_distance_2d_sq
 from .geom import check_for_intersection_lineseg_circle, check_for_intersection_lineseg_lineseg
 from .geom import calc_angle_between_unit_vectors
 import time
+from copy import deepcopy
 import os
 
 
@@ -116,9 +117,9 @@ class Track(object):
         self.track_name = None
         self.in_lines = []
         self.out_lines = []
+        self.cent_lines = []
         self.startLine = None
         self.startPos = None
-        self.aTrackRotation0 = None
 
     @classmethod
     def loader(cls, track_name):
@@ -127,12 +128,15 @@ class Track(object):
         module_path = os.path.dirname(os.path.abspath(__file__))
         return pickle.load(open(module_path + '/../data/track/' + track_name + '.track', 'rb'))
 
-    def load_from_csv(self, track_name: str):
+    def load_from_csv(self, track_name: str, is_closed: bool=True):
         """
             Load raw points from the csv files and turn into two sets of line objects
 
             Assumes the csv file follows rows of points [X, Y] and the in/out datasets
             take a _IN / _OUT suffix
+
+            If the track is open then start pos is at index [0] and the startline is placed at index [-1].
+            This assumed only one lap can be completed
         """
         from .geom import get_intersection_point_lineseg_lineseg
         # save the track name
@@ -158,8 +162,12 @@ class Track(object):
         self.in_lines = []
         for i in range(0, in_raw_points.shape[0]):
             if i == in_raw_points.shape[0] - 1:
-                # last point, join to the first
-                p2 = in_raw_points[0, :] - startPosRaw
+                if is_closed:
+                    # last point, join to the first
+                    p2 = in_raw_points[0, :] - startPosRaw
+                else:
+                    # just stop if we're on the last point and the track is open
+                    break
             else:
                 p2 = in_raw_points[i + 1, :] - startPosRaw
             p1 = in_raw_points[i, :] - startPosRaw
@@ -172,8 +180,12 @@ class Track(object):
         self.out_lines = []
         for i in range(0, out_raw_points.shape[0]):
             if i == out_raw_points.shape[0] - 1:
-                # last point, join to the first
-                p2 = out_raw_points[0, :] - startPosRaw
+                if is_closed:
+                    # last point, join to the first
+                    p2 = out_raw_points[0, :] - startPosRaw
+                else:
+                    # just stop if we're on the last point and the track is open
+                    break
             else:
                 p2 = out_raw_points[i + 1, :] - startPosRaw
             p1 = out_raw_points[i, :] - startPosRaw
@@ -186,13 +198,21 @@ class Track(object):
         # out to the outer track and take the halfway point of the intersection
         # ray will be fired out such that the angle between it and the current and previous lines
         # are equal
-        cent_pts_raw = np.zeros((len(self.in_lines), 2))
+        cent_pts_raw = np.array([])
         for i,l1 in enumerate(self.in_lines):
-            # get the preceeding inner line
             if i == 0:
-                l0 = self.in_lines[-1]
+                if is_closed:
+                    # get the preceeding inner line
+                    l0 = self.in_lines[-1]
+                else:
+                    # track is open so the first point is just the mid point of the first data points
+                    l0 = Line(self.in_lines[0].p1, self.out_lines[0].p1)
+                    cent_pts_raw = np.array(l0.p1 + l0.v_hat * (l0.v_mag / 2))
+                    # just skip to the next point now
+                    continue
             else:
                 l0 = self.in_lines[i - 1]
+
 
             # calculate the angle between the two lines find the equi - angle (can't remember the correct terminology!!!)
             a0 = calc_angle_between_unit_vectors(l0.v_hat, l1.v_hat) / 2
@@ -258,12 +278,38 @@ class Track(object):
                     if d_temp < d and d_temp < din_lt2:
                         d = d_temp
                         lmid = lt2
-
+            """
+            if lmid == None:
+                print(i)
+                import matplotlib.pyplot as plt
+                for lp in self.in_lines:
+                    plt.plot([lp.x1, lp.x2], [lp.y1, lp.y2])
+                for lp in self.out_lines:
+                    plt.plot([lp.x1, lp.x2], [lp.y1, lp.y2])
+                plt.plot([lt1.x1, lt1.x1 + lt1.v_hat[0]], [lt1.y1, lt1.y1 + lt1.v_hat[1]])
+                plt.plot([lt2.x1, lt2.x1 + lt2.v_hat[0]], [lt2.y1, lt2.y1 + lt2.v_hat[1]])
+                plt.title('! WARNING ! The vector does not intersect the track, no centre point will be placed')
+                plt.show()
+            """
             # set the point at half the distance
-            cent_pts_raw[i,:] = np.array(lmid.p1) + lmid.v_hat * (np.sqrt(d) / 2)
-            if i == 0:
-                # set the start line if the first point
-                self.startLine = Line(lmid.p1, tuple(np.array(lmid.p1) + lmid.v_hat * (np.sqrt(d))))
+            if lmid is not None:
+                if len(cent_pts_raw) == 0:
+                    cent_pts_raw = np.array(lmid.p1) + lmid.v_hat * (np.sqrt(d) / 2)
+                else:
+                    cent_pts_raw = np.vstack((cent_pts_raw, np.array(lmid.p1) + lmid.v_hat * (np.sqrt(d) / 2)))
+                if not is_closed:
+                    # store a copy of the mid line if the track is open, this is
+                    # to place the start line at the end
+                    lmidold = deepcopy(lmid)
+                    dold = d
+            if is_closed:
+                if i == 0:
+                    # set the start line if the first point
+                    self.startLine = Line(lmid.p1, tuple(np.array(lmid.p1) + lmid.v_hat * (np.sqrt(d))))
+            else:
+                if i == (len(self.in_lines) - 1):
+                    # set the start line if the last point
+                    self.startLine = Line(lmidold.p1, tuple(np.array(lmidold.p1) + lmidold.v_hat * (np.sqrt(dold))))
 
         # now set points every metre along the centre points
         pt_spc = 1.0 # [m]
@@ -273,7 +319,10 @@ class Track(object):
             if i == 0:
                 cent_points = np.array([p0])
             if i == (cent_pts_raw.shape[0] - 1):
-                p1 = cent_pts_raw[0, :]
+                if is_closed:
+                    p1 = cent_pts_raw[0, :]
+                else:
+                    break
             else:
                 p1 = cent_pts_raw[i + 1, :]
             lt = Line(tuple(p0), tuple(p1))
@@ -292,7 +341,10 @@ class Track(object):
         self.cent_lines = []
         for i,p1 in enumerate(cent_points):
             if i == (cent_points.shape[0] - 1):
-                p2 = cent_points[0, :]
+                if is_closed:
+                    p2 = cent_points[0, :]
+                else:
+                    break
             else:
                 p2 = cent_points[i + 1, :]
             self.cent_lines.append(Line(tuple(p1), tuple(p2)))
@@ -307,6 +359,63 @@ class Track(object):
         """
         import pickle
         pickle.dump(self, open(self.module_path + '/../data/track/' + self.track_name + '.track', 'wb'))
+
+class TrackStore(Track):
+    """
+        Class to store multiple tracks with methods to load one to be used as the
+        active track
+    """
+
+    def __init__(self, store_name):
+        """
+            Just initialise the parent class
+        """
+        super().__init__()
+        self.store = []
+        self.num_tracks = 0
+        self.name = store_name
+        self.cat_length = None # if the store is made up of regular sized categories then delcare here
+
+    def load_from_csv(self, track_name: str, is_closed=True):
+        # run the parent class loader
+        super().load_from_csv(track_name, is_closed=is_closed)
+        # now store
+        t = Track()
+        t.track_name = self.track_name
+        t.in_lines = self.in_lines
+        t.out_lines = self.out_lines
+        t.cent_lines = self.cent_lines
+        t.startLine = self.startLine
+        t.startPos = self.startPos
+        self.store.append(t)
+        self.num_tracks += 1
+
+    def activate_track(self,n: int):
+        t = self.store[n]
+        self.track_name = t.track_name
+        self.in_lines = t.in_lines
+        self.out_lines = t.out_lines
+        self.cent_lines = t.cent_lines
+        self.startLine = t.startLine
+        self.startPos = t.startPos
+
+    def shuffle_tracks(self):
+        import random
+        random.shuffle(self.store)
+
+    def pickle_track(self):
+        """
+            Save the track as a binary by pickling it - stops people from cheating!
+        """
+        import pickle
+        pickle.dump(self, open(self.module_path + '/../data/track/' + self.name + '.tracks', 'wb'))
+
+    @classmethod
+    def loader(cls, store_name):
+        import pickle
+        # load the track
+        module_path = os.path.dirname(os.path.abspath(__file__))
+        return pickle.load(open(module_path + '/../data/track/' + store_name + '.tracks', 'rb'))
 
 
 if __name__ == "__main__":
