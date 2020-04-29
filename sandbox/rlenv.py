@@ -14,7 +14,8 @@ from collections import OrderedDict
 from sandbox.rlagent import FOneAgent
 
 timestep = 0.1
-episodes = 500
+episodes = 5000
+training_interval = 100     # No of episodes between training
 
 def main():
     # instantiate the objects
@@ -73,7 +74,7 @@ def main():
                 print("Episode {} completed. Total reward: {} ".format(ep, ep_reward))
                 ep_reward = 0
                 # Make it retrain
-                if ep % 10 == 0:
+                if ep % training_interval == 0:
                     agent.experience_replay()
                 ep += 1
                 veh.reset_vehicle_position()
