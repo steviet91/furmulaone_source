@@ -1,0 +1,1 @@
+This is an OpenAI Gym compatible environment, using the furmula-one simulation game
