@@ -6,6 +6,7 @@ from src.lidar import Lidar
 import numpy as np
 import time
 import gym
+import sys
 
 
 
@@ -87,79 +88,103 @@ def normalise_state(high, low, state):
     return (state-low) / (high-low)
 
 def main_dqn():
-    EPISODES = 10000
+    EPISODES = 1000
     START_EPSILON_DECAY = 1
-    STOP_EPSILON_DECAY = EPISODES // 2
-    epsilon = 1
-    epsilon_decay_value = epsilon/(STOP_EPSILON_DECAY - START_EPSILON_DECAY)
+    STOP_EPSILON_DECAY = EPISODES // 1
+    epsilon = 0.5
+    epsilon_decay_value = 0
+    #epsilon_decay_value = epsilon/(STOP_EPSILON_DECAY - START_EPSILON_DECAY)
     MIN_EPSILON = 0.001
     MIN_REWARD = 0.0
     AGGREGATE_STATES_EVERY = EPISODES // 100
-    SHOW_PREVIEW = True
+    SAVE_EVERY = 10
+    SHOW_PREVIEW = False
+    TRACK_CAT = 0
+
+    gp = GamePad() # control renders and
+    manual_render = False
 
 
-    #env = FurmulaOne()
-    env = gym.make('MountainCar-v0')
-    #agent = DQNAgent(num_inputs=env._NUM_STATES, num_actions=env._NUM_ACTIONS, hidden_layer_lens=[16,16])
-    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n, hidden_layer_lens=[len(env.observation_space.high)] * 2)
+    env = FurmulaOne()
+    #env = gym.make('MountainCar-v0')
+
+    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n)
     ep_rewards = []
 
-    for episode in range(EPISODES):
-        agent.tensorboard.step = episode
+    try:
+        for episode in range(EPISODES):
+            if agent.tensorboard:
+                agent.tensorboard.step = episode
 
-        # Reset the episode params
-        episode_reward = 0
-        step = 1
+            # Reset the episode params
+            episode_reward = 0
+            step = 1
 
-        # reset the game and get the initial state
-        current_state = env.reset()
-
-        current_state = normalise_state(env.observation_space.high, env.observation_space.low, current_state)
-
-        # Reset the flag and start iterating until the episode ends
-        done = False
-
-        while not done:
-
-            if np.random.random() > epsilon:
-                # Get the action from the Q table
-                action = np.argmax(agent.get_qs(current_state))
+            # reset the game and get the initial state
+            if env.track.is_store:
+                track_num = np.random.randint(TRACK_CAT * env.track.data.cat_length, (TRACK_CAT + 1) * env.track.data.cat_length)
+                current_state = env.reset(True, track_num)
             else:
-                # Get a random action
-                #action = np.random.randint(0, env._NUM_ACTIONS)
-                action = np.random.randint(0, env.action_space.n)
+                current_state = env.reset()
 
-            new_state, reward, done, _ = env.step(action)
+            #current_state = normalise_state(env.observation_space.high, env.observation_space.low, current_state)
 
-            episode_reward += reward
+            # Reset the flag and start iterating until the episode ends
+            done = False
 
-            if SHOW_PREVIEW and not episode % AGGREGATE_STATES_EVERY:
-                env.render()
+            if gp.render_requested:
+                manual_render = True
+                gp.render_requested = False
+            else:
+                manual_render = False
 
-            agent.update_replay_memory((current_state, action, reward, new_state, done))
-            agent.train(done, step)
+            if gp.quit_requested:
+                break
 
-            current_state = new_state
-            step += 1
+            while not done:
 
-        ep_rewards.append(episode_reward)
-        if not episode % AGGREGATE_STATES_EVERY or episode == 1:
-            average_reward = sum(ep_rewards[-AGGREGATE_STATES_EVERY:]) / len(ep_rewards[-AGGREGATE_STATES_EVERY:])
-            min_reward = min(ep_rewards[-AGGREGATE_STATES_EVERY:])
-            max_reward = max(ep_rewards[-AGGREGATE_STATES_EVERY:])
+                if np.random.random() > epsilon:
+                    # Get the action from the Q table
+                    action = np.argmax(agent.get_qs(current_state))
+                else:
+                    # Get a random action
+                    action = np.random.randint(0, env.action_space.n)
 
-            agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward)
+                new_state, reward, done, _ = env.step(action)
 
-            if min_reward >= MIN_REWARD:
-                agent.model.save(agent.save_path+f'{agent.name}_{max_reward:_>7.2f}max__{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+                episode_reward += reward
 
-        print(f'Episode: {episode} Reward: {episode_reward}')
-        #print(f'Episode: {episode} Reward: {episode_reward} rLapProgress: {env.r_progress}')
-        if START_EPSILON_DECAY <= episode <= STOP_EPSILON_DECAY:
-            epsilon -= epsilon_decay_value
-            epsilon = max(0, epsilon)
+                if (SHOW_PREVIEW and not episode % AGGREGATE_STATES_EVERY) or manual_render:
+                    env.render()
 
+                agent.update_replay_memory((current_state, action, reward, new_state, done))
+                agent.train(done, step)
+
+                current_state = new_state
+                step += 1
+
+            ep_rewards.append(episode_reward)
+            if not episode % AGGREGATE_STATES_EVERY or episode == 1:
+                average_reward = sum(ep_rewards[-AGGREGATE_STATES_EVERY:]) / len(ep_rewards[-AGGREGATE_STATES_EVERY:])
+                min_reward = min(ep_rewards[-AGGREGATE_STATES_EVERY:])
+                max_reward = max(ep_rewards[-AGGREGATE_STATES_EVERY:])
+
+                if agent.tensorboard:
+                    agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward)
+
+                if episode % SAVE_EVERY == 0 and episode != 0:
+                    agent.model.save(agent.save_path+f'{agent.name}_{max_reward:_>7.2f}max__{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+
+            print(f'Episode: {episode}, Epsilon {epsilon:.3f}, Reward: {episode_reward:.3f}')
+            #print(f'Episode: {episode} Reward: {episode_reward} rLapProgress: {env.r_progress}')
+            if START_EPSILON_DECAY <= episode <= STOP_EPSILON_DECAY:
+                epsilon -= epsilon_decay_value
+                epsilon = max(0, epsilon)
+
+    except KeyboardInterrupt:
+        pass
     env.close()
+    #gp.exit_thread()
 
 
 if __name__ == "__main__":

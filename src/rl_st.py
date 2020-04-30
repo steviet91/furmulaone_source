@@ -7,7 +7,7 @@ from collections import deque
 import random
 import time
 import numpy as np
-
+import sys
 
 # #########
 # Q TABLE #
@@ -101,7 +101,10 @@ class DQNAgent(object):
         self.target_update_counter = 0
 
         # tensorboard
-        self.tensorboard = FurmulaTensorBoard(log_dir=self.log_path + f'{int(time.time())}-{self.name}')
+        if False:
+            self.tensorboard = FurmulaTensorBoard(log_dir=self.log_path + f'{int(time.time())}-{self.name}')
+        else:
+            self.tensorboard = None
 
     def create_model(self):
         """
@@ -130,6 +133,8 @@ class DQNAgent(object):
             Updates the replay memory with the current transition
         """
         self.replay_memory.append(transition)
+        if len(self.replay_memory) > self._REPLAY_MEMORY_SIZE:
+            print('MEMORY TOO BIG')
 
     def get_qs(self, state):
         """
@@ -177,8 +182,10 @@ class DQNAgent(object):
             y.append(current_qs)
 
         # Fit on all samples as one batch, log only on terminal state
-        self.model.fit(np.array(X), np.array(y), batch_size=self._MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
-
+        if self.tensorboard:
+            self.model.fit(np.array(X), np.array(y), batch_size=self._MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
+        else:
+            self.model.fit(np.array(X), np.array(y), batch_size=self._MINIBATCH_SIZE, verbose=0, shuffle=False)
         # Update the target network counter every episode
         if terminal_state:
             self.target_update_counter += 1

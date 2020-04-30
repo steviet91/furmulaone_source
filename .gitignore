@@ -5,3 +5,5 @@ dist
 .vscode
 /data/rl_logs/**
 !/data/rl_logs/.gitkeep
+/data/rl_models/**
+!/data/rl_models/.gitkeep

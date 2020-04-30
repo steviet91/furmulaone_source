@@ -1,4 +1,5 @@
 import gym
+from gym import spaces
 from src.vehicle import Vehicle
 from src.lidar import Lidar
 from src.track import TrackHandler
@@ -8,19 +9,34 @@ import numpy as np
 
 class FurmulaOne(gym.Env):
 
-    _NUM_STATES = Lidar._NRays * 3 + 6
-    _NUM_ACTIONS = 15
+    _NUM_STATES = Lidar._NRays * 3 + 3
+    _NUM_ACTIONS = 4
     _MAX_T_SIM = 10 * 60 # maximum simulation time, prevents slow driving winning
+    _MAX_LAPS_CLOSED_LOOP = 5
 
-    def __init__(self, track='dodec_track', task_rate=0.01):
+    def __init__(self, track: str='rl_training_set', is_store: bool=True, task_rate: float=0.01):
         # initialise the objects
         self.task_rate = task_rate
-        self.track = TrackHandler(track)
+        self.track = TrackHandler(track, is_store)
         self.vehicle = Vehicle(1, self.track, 60, 60, 60, task_rate=self.task_rate, auto_reset=False)
-        self.vis = Vis(self.track, self.vehicle)
+        self.vis = Vis(self.track, self.vehicle, use_camera_spring=False)
 
-    def reset(self):
+        self.action_space = spaces.Discrete(self._NUM_ACTIONS)
 
+        self.observation_space = spaces.Box(
+            low = np.zeros(self._NUM_STATES),
+            high = np.ones(self._NUM_STATES),
+            dtype=np.float64
+        )
+
+    def shuffle_track_store(self):
+        if self.track.is_store:
+            self.track.data.shuffle_tracks()
+
+    def reset(self, switch_track: bool=False, track_num: int=None):
+
+        if switch_track:
+            self.track.data.activate_track(track_num)
         self.rThrottlePedalDemand = 0.0
         self.rBrakePedalDemand = 0.0
         self.aSteeringWheelDemand = 0.0
@@ -43,41 +59,45 @@ class FurmulaOne(gym.Env):
     def step(self, action):
         """
             Possible actions are as follows:
-                [0]     - Do nothing
-                [1]     - Increase steering angle
-                [2]     - Reduce steering angle
-                [3]     - Increase throttle
-                [4]     - Reduce throttle
-                [5]     - Increase brake
-                [6]     - Reduce brake
-                [7]     - Increase throttle - increase steering angle
-                [8]     - Increase throttle - reduce steering angle
-                [9]     - Reduce throttle - increase steering angle
-                [10]    - Reduce throttle - reduce steering angle
-                [11]    - Increase brake - increase steering angle
-                [12]    - Increase brake - reduce steering angle
-                [13]    - Reduce brake - increase steering angle
-                [14]    - Reduce brake - reduce steering angle
+                [0]     - Increase steering angle
+                [1]     - Reduce steering angle
+                [2]     - Increase throttle
+                [3]     - Reduce throttle
+                [4]     - Increase brake
+                [5]     - Reduce brake
+                [6]     - Increase throttle - increase steering angle
+                [7]     - Increase throttle - reduce steering angle
+                [8]     - Reduce throttle - increase steering angle
+                [9]    - Reduce throttle - reduce steering angle
+                [10]    - Increase brake - increase steering angle
+                [11]    - Increase brake - reduce steering angle
+                [12]    - Reduce brake - increase steering angle
+                [13]    - Reduce brake - reduce steering angle
         """
         # increment simulation time
         self.t_sim += self.task_rate
-        """
-        if action == 1:
+
+        if action == 0:
+            # steer right
             self.aSteeringWheelDemand = 360.0
             self.rBrakePedalDemand = 0.0
             self.rThrottlePedalDemand = 0.0
-        if action == 2:
+        if action == 1:
+            # steer left
             self.aSteeringWheelDemand = -360.0
             self.rBrakePedalDemand = 0.0
             self.rThrottlePedalDemand = 0.0
-        if action == 3:
+        if action == 2:
+            # accelerate
             self.aSteeringWheelDemand = 0
             self.rBrakePedalDemand = 1.0
             self.rThrottlePedalDemand = 0.0
-        if action == 4:
+        if action == 3:
+            # brake
             self.aSteeringWheelDemand = 0.0
             self.rBrakePedalDemand = 0.0
             self.rThrottlePedalDemand = 1.0
+
         """
         # sort out the brake
         if any(action == i for i in [5, 11, 12]):
@@ -103,14 +123,18 @@ class FurmulaOne(gym.Env):
         elif any(action == i for i in [2, 8, 10, 12, 14]):
             self.aSteeringWheelDemand -= 1000 * self.task_rate
         self.aSteeringWheelDemand = max(-360.0, min(360.0, self.aSteeringWheelDemand))
-
+        """
         # update the vehicle
         self.vehicle.update(self.rThrottlePedalDemand, self.rBrakePedalDemand, self.aSteeringWheelDemand)
         self.r_progress = self.vehicle.rLapProgress + 1.0 * self.vehicle.NLapsComplete
 
         # check if done
-        if self.vehicle.bHasCollided or self.vehicle.bMovingBackwards or self.vehicle.NLapsComplete >= 5 or self.t_sim > self._MAX_T_SIM:
-            print(self.vehicle.bHasCollided, self.vehicle.bMovingBackwards, self.vehicle.NLapsComplete, self.t_sim)
+        # check is the track is open or a closed loop
+        if self.track.data.is_closed:
+            laps_done = self.vehicle.NLapsComplete >= self._MAX_LAPS_CLOSED_LOOP
+        else:
+            laps_done = self.vehicle.NLapsComplete >= 1
+        if self.vehicle.bHasCollided or self.vehicle.bMovingBackwards or laps_done or self.t_sim > self._MAX_T_SIM:
             done = True
         else:
             done = False
@@ -137,7 +161,7 @@ class FurmulaOne(gym.Env):
             self.r_progress_mem = self.r_progress
 
         # if vehicle speed is below a thresh then penalise all non +ve accelerations
-        if self.vehicle.vVehicle < 10.0:
+        if self.vehicle.vVehicle < 5.0:
             if self.vehicle.gxVehicle <= 0:
                 return -1
             else:
@@ -160,9 +184,7 @@ class FurmulaOne(gym.Env):
         # vehicle info
         veh_info = np.array([max(0.0, min(1.0, self.vehicle.vVehicle / 100)),
                             max(0.0, min(1.0, (self.vehicle.gxVehicle + 10) / 20)),
-                            max(0.0, min(1.0, (self.vehicle.gyVehicle + 10) / 20)),
-                            self.rThrottlePedalDemand, self.rBrakePedalDemand,
-                            (self.aSteeringWheelDemand + 360) / 720])
+                            max(0.0, min(1.0, (self.vehicle.gyVehicle + 10) / 20))])
 
         states = np.hstack((coll_arr,veh_info))
         return states
@@ -174,11 +196,16 @@ class FurmulaOne(gym.Env):
 if __name__ == "__main__":
     env = FurmulaOne()
     env.reset()
-    for i in range(10000):
-        new_state, reward, done, _ = env.step(3)
-        print(new_state)
-        #print(reward)
-        if done:
-            break
-        env.render()
+    print(len(env.observation_space.high), env.action_space.n)
+    """
+    for t in range(25):
+        env.reset(switch_track=True, track_num=t)
+        for i in range(10000):
+            new_state, reward, done, _ = env.step(3)
+            print(new_state)
+            #print(reward)
+            if done:
+                break
+            env.render()
+    """
     env.close()

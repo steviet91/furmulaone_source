@@ -15,6 +15,7 @@ class GamePad(object):
         # Tells the main thread that the user has asked to quit or reset
         self.quit_requested = False
         self.reset_requested = False
+        self.render_requested = False
         # Init the demans all to 0
         self.aSteeringWheelDemand = 0.0
         self.rBrakeDemand = 0.0
@@ -38,6 +39,8 @@ class GamePad(object):
                             self.quit_requested = True
                         if event.code == "BTN_EAST":
                             self.reset_requested = True
+                        if event.code == "BTN_SOUTH":
+                            self.render_requested = True
                         if event.code == "ABS_X":
                             self.aSteeringWheelDemand = max(-360, min(360, event.state / 12000 * 360))  # assume 12000 is max
                             #print('aSteeringWheelDemand: ', event.state,self.aSteeringWheelDemand)
@@ -66,6 +69,8 @@ class GamePad(object):
                             self.quit_requested = True
                         if event.code == "KEY_R":
                             self.reset_requested = True
+                        if event.code == "KEY_P":
+                            self.render_requested = True
                         if event.code == "KEY_W":
                             if event.state > 0:
                                 # Then the key has been pressed (1 ==> key down) or is being pressed (2 ==> held down)
