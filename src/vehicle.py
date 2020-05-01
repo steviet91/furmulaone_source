@@ -115,6 +115,7 @@ class Vehicle(object):
         self.rLapProgress = 0.0
         self.NLapIdx = 0
         self.tLapLive = 0
+        self.tLapPen = 0
 
     # #################
     # STANDARD UPDATE #
