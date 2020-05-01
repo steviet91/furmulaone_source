@@ -108,7 +108,8 @@ def main_dqn():
     env = FurmulaOne()
     #env = gym.make('MountainCar-v0')
 
-    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n)
+    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n,
+                    load_file='st_dqn_-359.20max__-366.25avg_-372.20min__1588315406.model')
     ep_rewards = []
 
     try:

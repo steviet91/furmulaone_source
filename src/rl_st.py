@@ -68,7 +68,7 @@ class DQNAgent(object):
     _DISCOUNT = 0.95
     _UPDATE_TARGET_THRESH = 5
 
-    def __init__(self, name='st_dqn', num_inputs=1, num_actions=3, hidden_layer_lens=[], activation='relu'):
+    def __init__(self, name='st_dqn', num_inputs=1, num_actions=3, hidden_layer_lens=[], activation='relu', load_file=None):
         """
             Initialise the object
         """
@@ -87,13 +87,6 @@ class DQNAgent(object):
         self.num_actions = num_actions
         self.name = name
 
-        # initialise the main network
-        self.model = self.create_model()
-
-        # initialise the tart network
-        self.target_model = self.create_model()
-        self.target_model.set_weights(self.model.get_weights())
-
         # initialise an array to store the last n steps for training
         self.replay_memory = deque(maxlen=self._REPLAY_MEMORY_SIZE)
 
@@ -105,6 +98,19 @@ class DQNAgent(object):
             self.tensorboard = FurmulaTensorBoard(log_dir=self.log_path + f'{int(time.time())}-{self.name}')
         else:
             self.tensorboard = None
+
+        if not load_file:
+            # initialise the main network
+            self.model = self.create_model()
+        else:
+            self.model = keras.models.load_model(self.save_path + load_file)
+            print(f'Model loaded from file: {load_file}')
+
+        # initialise the tart network
+        self.target_model = self.create_model()
+        self.target_model.set_weights(self.model.get_weights())
+
+
 
     def create_model(self):
         """
