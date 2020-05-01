@@ -113,7 +113,7 @@ class Line(object):
         self.y1 = self.p1[1]
         self.x2 = self.p2[0]
         self.y2 = self.p2[1]
-        
+
 
     def rotate_line_by_delta(self, aRot: float, cX: float, cY: float):
         """

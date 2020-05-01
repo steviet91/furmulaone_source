@@ -1,11 +1,12 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.callbacks import TensorBoard
+from src.nn import NeuralNetwork
 import os
 from collections import deque
 import random
 import time
+from time import sleep
 import numpy as np
 import sys
 
@@ -66,9 +67,10 @@ class DQNAgent(object):
     _MIN_REPLAY_MEMORY_SIZE = 1000
     _MINIBATCH_SIZE = 500
     _DISCOUNT = 0.95
-    _UPDATE_TARGET_THRESH = 5
+    _TRAIN_PROC_SLEEP_DUR = 0.01
+    _NUM_EPOCHS = 1
 
-    def __init__(self, name='st_dqn', num_inputs=1, num_actions=3, hidden_layer_lens=[], activation='relu', load_file=None):
+    def __init__(self, name='st_dqn', num_inputs=1, num_actions=3, hidden_layer_lens=[], activation='relu', load_file=None, custom_sim_model=False):
         """
             Initialise the object
         """
@@ -86,51 +88,44 @@ class DQNAgent(object):
         self.activation = activation
         self.num_actions = num_actions
         self.name = name
+        self.custom_sim_model = custom_sim_model
 
         # initialise an array to store the last n steps for training
         self.replay_memory = deque(maxlen=self._REPLAY_MEMORY_SIZE)
 
-        # counter to determine when to update the target model with the main model weights
-        self.target_update_counter = 0
-
-        # tensorboard
-        if False:
-            self.tensorboard = FurmulaTensorBoard(log_dir=self.log_path + f'{int(time.time())}-{self.name}')
-        else:
-            self.tensorboard = None
-
         if not load_file:
             # initialise the main network
-            self.model = self.create_model()
+            self.train_model = self.create_model()
         else:
-            self.model = keras.models.load_model(self.save_path + load_file)
+            self.train_model = keras.models.load_model(self.save_path + load_file)
             print(f'Model loaded from file: {load_file}')
 
         # initialise the tart network
-        self.target_model = self.create_model()
-        self.target_model.set_weights(self.model.get_weights())
+        self.sim_model = self.create_model(use_custom_nn=custom_sim_model)
+        self.sim_model.set_weights(self.train_model.get_weights())
 
 
-
-    def create_model(self):
+    def create_model(self, use_custom_nn=False):
         """
-            Creates a keras NN model
+            Creates a keras NN model or a custom NN (should only be used for inference)
         """
-        model = keras.Sequential()
+        if not use_custom_nn:
+            model = keras.Sequential()
 
-        # add the hidden layers
-        for i,h in enumerate(self.h_layer_lens):
-            if i == 0:
-                model.add(Dense(h, input_shape=(self.num_inputs, ), activation=self.activation))
-            else:
-                model.add(Dense(h))
+            # add the hidden layers
+            for i,h in enumerate(self.h_layer_lens):
+                if i == 0:
+                    model.add(Dense(h, input_shape=(self.num_inputs, ), activation=self.activation))
+                else:
+                    model.add(Dense(h))
 
-        # add the output layer
-        model.add(Dense(self.num_actions, activation='linear'))
+            # add the output layer
+            model.add(Dense(self.num_actions, activation='linear'))
 
-        # complile the model
-        model.compile(optimizer='Adam', loss='mse', metrics=['accuracy'])
-
+            # complile the model
+            model.compile(optimizer='Adam', loss='mse', metrics=['accuracy'])
+        else:
+            model = NeuralNetwork(self.num_inputs, self.num_actions, self.h_layer_lens, [self.activation]*len(self.h_layer_lens), 'linear', dtype=np.float32)
         # pass back the model
         return model
 
@@ -146,95 +141,66 @@ class DQNAgent(object):
         """
             Queries the main network for Q values given current observations space
         """
-        return self.model.predict(np.array(state).reshape(-1, *state.shape))[0]
+        if self.custom_sim_model:
+            return self.sim_model.predict(state)
+        else:
+            return self.sim_model.predict(np.array(state).reshape(-1, *state.shape))[0]
 
-    def train(self, terminal_state, step):
+    def train(self):
         """
             Trains the main network every step during episode
         """
         # only start training if a vertain nmbers of samples is already saved
         if len(self.replay_memory) < self._MIN_REPLAY_MEMORY_SIZE:
             return
-
-        # Get a minibatch of random samples from the memory replay table
-        minibatch = random.sample(self.replay_memory, self._MINIBATCH_SIZE)
-
-        # Get the current states from the minimbatch, query the main model for Q values
-        current_states = np.array([transition[0] for transition in minibatch])
-        current_qs_list = self.model.predict(current_states)
-
-        # Get future states from the minibatch, then query NN model for Q values
-        new_current_states = np.array([transition[3] for transition in minibatch])
-        future_qs_list = self.target_model.predict(new_current_states)
-
-        X = []
-        y = []
-
-        for idx, (current_state, action, reward, new_current_state, done) in enumerate(minibatch):
-
-            # if not a terminal state, get new q from future states, otherwise set to 0
-            if not done:
-                max_future_q = np.max(future_qs_list[idx])
-                new_q = reward + self._DISCOUNT * max_future_q
-            else:
-                new_q = reward
-
-            # update Q value for given state
-            current_qs = current_qs_list[idx]
-            current_qs[action] = new_q
-
-            # add to the training data
-            X.append(current_state)
-            y.append(current_qs)
-
-        # Fit on all samples as one batch, log only on terminal state
-        if self.tensorboard:
-            self.model.fit(np.array(X), np.array(y), batch_size=self._MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
         else:
-            self.model.fit(np.array(X), np.array(y), batch_size=self._MINIBATCH_SIZE, verbose=0, shuffle=False)
-        # Update the target network counter every episode
-        if terminal_state:
-            self.target_update_counter += 1
+            # Get the current states from the minimbatch, query the main model for Q values
+            current_states = np.array([transition[0] for transition in self.replay_memory])
+            current_qs_list = self.train_model.predict(current_states)
 
-        # if the counter reaches a set value, update the target network with the weights of the main
-        if self.target_update_counter > self._UPDATE_TARGET_THRESH:
-            self.target_model.set_weights(self.model.get_weights())
-            self.target_update_counter = 0
+            # Get future states, then query NN model for Q values
+            new_current_states = np.array([transition[3] for transition in self.replay_memory])
+            future_qs_list = self.train_model.predict(new_current_states)
 
-# ####################
-# CUSTOM TensorBoard #
-# ####################
-class FurmulaTensorBoard(TensorBoard):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.writer = tf.summary.create_file_writer(self.log_dir)
-        self._log_write_dir = self.log_dir
-        self.writer.set_as_default()
-        self.step = 0
+            X = []
+            y = []
 
-    def update_stats(self,**stats):
-        for k,v in stats.items():
-            tf.summary.scalar(k, data=v, step=self.step)
+            for idx, (current_state, action, reward, new_current_state, done) in enumerate(self.replay_memory):
 
-    # Overriding this method to stop creating default log writer
-    def set_model(self, model):
-        pass
+                # if not a terminal state, get new q from future states, otherwise set to 0
+                if not done:
+                    max_future_q = np.max(future_qs_list[idx])
+                    new_q = reward + self._DISCOUNT * max_future_q
+                else:
+                    new_q = reward
 
-    # Overrided, saves logs with our step number
-    # (otherwise every .fit() will start writing from 0th step)
-    def on_epoch_end(self, epoch, logs=None):
-        self.update_stats(**logs)
+                # update Q value for given state
+                current_qs = current_qs_list[idx]
+                current_qs[action] = new_q
 
-    # Overrided
-    # We train for one batch only, no need to save anything at epoch end
-    def on_batch_end(self, batch, logs=None):
-        pass
+                # add to the training data
+                X.append(current_state)
+                y.append(current_qs)
 
-    # Overrided, so won't close writer
-    def on_train_end(self, _):
-        pass
+            self.train_model.fit(np.array(X), np.array(y), epochs=self._NUM_EPOCHS, batch_size=self._MINIBATCH_SIZE, verbose=1, shuffle=True)
+            self.sim_model.set_weights(self.train_model.get_weights())
 
 
 if __name__ == "__main__":
-    tb = FurmulaTensorBoard(log_dir='C:/furmulaone_source/data/rl_logs/test')
-    tb.update_states(reward_avg=0.5, reward_min=0.5, reward_max=0.5)
+    a = DQNAgent(num_inputs=12, num_actions=4, use_custom_inference_model=True)
+
+    for i in range(20):
+        inputs = np.random.rand(12)
+        print(a.train_model.predict(np.array(inputs).reshape(-1, *inputs.shape))[0]-a.sim_model.predict(inputs))
+    n = 1000
+    t_k = []
+    t_m = []
+    for i in range(n):
+        inputs = np.random.rand(12)
+        t = time.time()
+        a.train_model.predict(np.array(inputs).reshape(-1, *inputs.shape))[0]
+        t_k.append(time.time()-t)
+        t = time.time()
+        a.sim_model.predict(inputs)
+        t_m.append(time.time()-t)
+    print(f'Keras: {np.mean(np.array(t_k)):.5f}s, Custom: {np.mean(np.array(t_m)):.5f}s')

@@ -11,7 +11,7 @@ class FurmulaOne(gym.Env):
 
     _NUM_STATES = Lidar._NRays * 3 + 3
     _NUM_ACTIONS = 4
-    _MAX_T_SIM = 10 * 60 # maximum simulation time, prevents slow driving winning
+    _MAX_T_SIM = 5 * 60 # maximum simulation time, prevents slow driving winning
     _MAX_LAPS_CLOSED_LOOP = 5
 
     def __init__(self, track: str='rl_training_set', is_store: bool=True, task_rate: float=0.01):

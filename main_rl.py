@@ -5,6 +5,7 @@ from sandbox.game_pad_inputs import GamePad
 from src.lidar import Lidar
 import numpy as np
 import time
+from time import sleep
 import gym
 import sys
 
@@ -88,7 +89,7 @@ def normalise_state(high, low, state):
     return (state-low) / (high-low)
 
 def main_dqn():
-    EPISODES = 1000
+    EPISODES = 100000
     START_EPSILON_DECAY = 1
     STOP_EPSILON_DECAY = EPISODES // 1
     epsilon = 0.5
@@ -97,7 +98,7 @@ def main_dqn():
     MIN_EPSILON = 0.001
     MIN_REWARD = 0.0
     AGGREGATE_STATES_EVERY = EPISODES // 100
-    SAVE_EVERY = 10
+    SAVE_EVERY = EPISODES // 200
     SHOW_PREVIEW = False
     TRACK_CAT = 0
 
@@ -105,21 +106,17 @@ def main_dqn():
     manual_render = False
 
 
-    env = FurmulaOne()
+    env = FurmulaOne(task_rate=0.1)
     #env = gym.make('MountainCar-v0')
 
-    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n,
-                    load_file='st_dqn_-359.20max__-366.25avg_-372.20min__1588315406.model')
+    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n, custom_sim_model=True)
     ep_rewards = []
 
     try:
         for episode in range(EPISODES):
-            if agent.tensorboard:
-                agent.tensorboard.step = episode
 
             # Reset the episode params
             episode_reward = 0
-            step = 1
 
             # reset the game and get the initial state
             if env.track.is_store:
@@ -142,41 +139,45 @@ def main_dqn():
             if gp.quit_requested:
                 break
 
-            while not done:
+            t_wall0 = time.time()
 
+            while not done:
+                t0 = time.time()
+                t = time.time()
                 if np.random.random() > epsilon:
                     # Get the action from the Q table
                     action = np.argmax(agent.get_qs(current_state))
                 else:
                     # Get a random action
                     action = np.random.randint(0, env.action_space.n)
-
+                t = time.time()
                 new_state, reward, done, _ = env.step(action)
-
                 episode_reward += reward
 
                 if (SHOW_PREVIEW and not episode % AGGREGATE_STATES_EVERY) or manual_render:
                     env.render()
-
+                t =time.time()
                 agent.update_replay_memory((current_state, action, reward, new_state, done))
-                agent.train(done, step)
-
                 current_state = new_state
-                step += 1
+
+            t_wall_sim = time.time() - t_wall0
+            # train the model on the data
+            agent.train()
+            t_wall_train = time.time() - t_wall0 - t_wall_sim
 
             ep_rewards.append(episode_reward)
+
             if not episode % AGGREGATE_STATES_EVERY or episode == 1:
                 average_reward = sum(ep_rewards[-AGGREGATE_STATES_EVERY:]) / len(ep_rewards[-AGGREGATE_STATES_EVERY:])
                 min_reward = min(ep_rewards[-AGGREGATE_STATES_EVERY:])
                 max_reward = max(ep_rewards[-AGGREGATE_STATES_EVERY:])
 
-                if agent.tensorboard:
-                    agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward)
+            if episode % SAVE_EVERY == 0 and episode != 0:
+                agent.train_model.save(agent.save_path+f'{agent.name}_{max_reward:_>7.2f}max__{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
 
-                if episode % SAVE_EVERY == 0 and episode != 0:
-                    agent.model.save(agent.save_path+f'{agent.name}_{max_reward:_>7.2f}max__{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
-
-            print(f'Episode: {episode}, Epsilon {epsilon:.3f}, Reward: {episode_reward:.3f}')
+            t_wall_ep = time.time() - t_wall0
+            print(f'episode: {episode} - epsilon: {epsilon:.3f} - reward: {episode_reward:.3f}')
+            print(f'ep-wall: {t_wall_ep:.3f}s - sim-wall: {t_wall_sim:.3f}s, train-wall: {t_wall_train:.3f}s, sim-time: {env.t_sim:.3f}s')
             #print(f'Episode: {episode} Reward: {episode_reward} rLapProgress: {env.r_progress}')
             if START_EPSILON_DECAY <= episode <= STOP_EPSILON_DECAY:
                 epsilon -= epsilon_decay_value
@@ -184,8 +185,9 @@ def main_dqn():
 
     except KeyboardInterrupt:
         pass
+
     env.close()
-    #gp.exit_thread()
+    gp.exit_thread()
 
 
 if __name__ == "__main__":
