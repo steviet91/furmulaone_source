@@ -109,7 +109,8 @@ def main_dqn():
     env = FurmulaOne(task_rate=0.1)
     #env = gym.make('MountainCar-v0')
 
-    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n, custom_sim_model=True)
+    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n, custom_sim_model=True,
+                        load_file='st_dqn___16.58max__-223.68avg_-536.29min__1588393723.model')
     ep_rewards = []
 
     try:
@@ -120,7 +121,8 @@ def main_dqn():
 
             # reset the game and get the initial state
             if env.track.is_store:
-                track_num = np.random.randint(TRACK_CAT * env.track.data.cat_length, (TRACK_CAT + 1) * env.track.data.cat_length)
+                #track_num = np.random.randint(TRACK_CAT * env.track.data.cat_length, (TRACK_CAT + 1) * env.track.data.cat_length)
+                track_num = np.random.randint(0, env.track.data.num_tracks)
                 current_state = env.reset(True, track_num)
             else:
                 current_state = env.reset()
