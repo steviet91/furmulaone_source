@@ -358,6 +358,20 @@ class Track(object):
         # now set the starting position on the centre line
         self.startPos = np.array(self.cent_lines[0].p1)
 
+        # finally if the track is open then extend the first and last points to
+        # prevent the vehicle from observing an open void. This will not effect
+        # starting position or the start line
+        if not is_closed:
+            extend_by = 30
+            l = self.out_lines[0]
+            self.out_lines[0] = Line(l.p1 - extend_by * l.v_hat, l.p2)
+            l = self.in_lines[0]
+            self.in_lines[0] = Line(l.p1 - extend_by * l.v_hat, l.p2)
+            l = self.out_lines[-1]
+            self.out_lines[-1] = Line(l.p1, l.p2 + extend_by * l.v_hat)
+            l = self.in_lines[-1]
+            self.in_lines[-1] = Line(l.p1, l.p2 + extend_by * l.v_hat)
+
 
     def pickle_track(self):
         """
