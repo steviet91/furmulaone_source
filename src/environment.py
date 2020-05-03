@@ -10,7 +10,7 @@ import numpy as np
 class FurmulaOne(gym.Env):
 
     _NUM_STATES = Lidar._NRays * 3 + 3
-    _NUM_ACTIONS = 4
+    _NUM_ACTIONS = 14
     _MAX_T_SIM = 5 * 60 # maximum simulation time, prevents slow driving winning
     _MAX_LAPS_CLOSED_LOOP = 5
 
@@ -76,7 +76,7 @@ class FurmulaOne(gym.Env):
         """
         # increment simulation time
         self.t_sim += self.task_rate
-
+        """
         if action == 0:
             # steer right
             self.aSteeringWheelDemand = 360.0
@@ -123,7 +123,7 @@ class FurmulaOne(gym.Env):
         elif any(action == i for i in [2, 8, 10, 12, 14]):
             self.aSteeringWheelDemand -= 1000 * self.task_rate
         self.aSteeringWheelDemand = max(-360.0, min(360.0, self.aSteeringWheelDemand))
-        """
+
         # update the vehicle
         self.vehicle.update(self.rThrottlePedalDemand, self.rBrakePedalDemand, self.aSteeringWheelDemand)
         self.r_progress = self.vehicle.rLapProgress + 1.0 * self.vehicle.NLapsComplete

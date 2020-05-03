@@ -90,11 +90,11 @@ def normalise_state(high, low, state):
 
 def main_dqn():
     EPISODES = 100000
-    START_EPSILON_DECAY = 1
+    START_EPSILON_DECAY = 5000
     STOP_EPSILON_DECAY = EPISODES // 1
     epsilon = 0.5
-    epsilon_decay_value = 0
-    #epsilon_decay_value = epsilon/(STOP_EPSILON_DECAY - START_EPSILON_DECAY)
+    #epsilon_decay_value = 0
+    epsilon_decay_value = epsilon/(STOP_EPSILON_DECAY - START_EPSILON_DECAY)
     MIN_EPSILON = 0.001
     MIN_REWARD = 0.0
     AGGREGATE_STATES_EVERY = EPISODES // 100
@@ -109,8 +109,7 @@ def main_dqn():
     env = FurmulaOne(task_rate=0.1)
     #env = gym.make('MountainCar-v0')
 
-    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n, custom_sim_model=True,
-                        load_file='st_dqn___16.58max__-223.68avg_-536.29min__1588393723.model')
+    agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n, custom_sim_model=True)
     ep_rewards = []
 
     try:

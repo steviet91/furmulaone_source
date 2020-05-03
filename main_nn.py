@@ -12,10 +12,10 @@ import time
 
 def main():
     task_rate = 0.1
-    env = FurmulaOne(task_rate=task_rate)
+    env = FurmulaOne(track='nardo', is_store=False, task_rate=task_rate)
     agent = DQNAgent(num_inputs=len(env.observation_space.high), num_actions=env.action_space.n, custom_sim_model=True,load_file='st_dqn_-443.00max__-459.50avg_-476.00min__1588408179.model')
-    for i in range(25):
-        current_state = env.reset(switch_track=True, track_num=i)
+    for i in range(1):
+        current_state = env.reset()
         done = False
         while not done:
             #t = time.time()
