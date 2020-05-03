@@ -12,11 +12,11 @@ fig.set_size_inches((10,10))
 for i,t in enumerate(ts.store):
     plt.cla()
     plt.title(f'Track: {t.track_name}, Complexity {i//ts.cat_length}')
-    xin = [l.x1 for l in t.in_lines]
-    yin = [l.y1 for l in t.in_lines]
+    xin = [l.x1 for l in t.in_lines] + [t.in_lines[-1].x2]
+    yin = [l.y1 for l in t.in_lines] + [t.in_lines[-1].y2]
     ax.plot(xin, yin)
-    xout = [l.x1 for l in t.out_lines]
-    yout = [l.y1 for l in t.out_lines]
+    xout = [l.x1 for l in t.out_lines] + [t.out_lines[-1].x2]
+    yout = [l.y1 for l in t.out_lines] + [t.out_lines[-1].y2]
     ax.plot(xout, yout)
     xcent = [l.x1 for l in t.cent_lines]
     ycent = [l.y1 for l in t.cent_lines]
